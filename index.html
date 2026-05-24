@@ -1,0 +1,1434 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Árbol Genealógico</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --cream:#F5F0E8; --cream2:#EDE5D8;
+  --bark:#6B4C35; --bark2:#4A3325;
+  --leaf:#4A7C59; --gold:#C4972A; --gold2:#A07B1E;
+  --text:#2A1F14; --text2:#6B5844;
+  --shadow:rgba(42,31,20,0.13);
+  --male:#3A6186; --female:#8B4B6E; --neutral:#5A6B4A;
+  --c-pareja:#C4972A; --c-padre:#4A7C59; --c-hermano:#3A6186;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Lato',sans-serif;background:var(--cream);color:var(--text);height:100vh;overflow:hidden;display:flex;flex-direction:column;}
+body.no-select{user-select:none!important;-webkit-user-select:none!important;}
+body.no-select *{user-select:none!important;-webkit-user-select:none!important;}
+
+/* HEADER */
+header{background:var(--bark2);padding:12px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid var(--gold);flex-shrink:0;z-index:10;}
+.logo{font-family:'Playfair Display',serif;color:var(--cream);font-size:19px;display:flex;align-items:center;gap:8px;}
+.logo span{color:var(--gold);}
+.hbtns{display:flex;gap:7px;}
+.btn{padding:7px 13px;border:none;border-radius:6px;cursor:pointer;font-family:'Lato',sans-serif;font-size:12px;font-weight:700;transition:all .15s;display:inline-flex;align-items:center;gap:5px;}
+.btn-gold{background:var(--gold);color:var(--bark2);}
+.btn-gold:hover{background:var(--gold2);}
+.btn-ghost{background:transparent;color:var(--cream);border:1.5px solid rgba(255,255,255,.3);}
+.btn-ghost:hover{background:var(--bark);}
+.btn-red{background:#c0392b;color:#fff;}
+.btn-red:hover{background:#a93226;}
+.btn-full{width:100%;justify-content:center;margin-bottom:7px;}
+
+/* WORKSPACE */
+.workspace{display:flex;flex:1;overflow:hidden;position:relative;}
+
+/* CANVAS */
+#cw{flex:1;position:relative;overflow:hidden;cursor:default;
+  background:radial-gradient(circle at 20% 20%,rgba(74,124,89,.05) 0%,transparent 50%),
+             radial-gradient(circle at 80% 80%,rgba(107,76,53,.05) 0%,transparent 50%),var(--cream);}
+#cw.panning{cursor:grabbing;}
+/* drag-wire SVG — in screen space (above everything) */
+#wire-svg{position:absolute;inset:0;pointer-events:none;overflow:visible;width:100%;height:100%;z-index:15;}
+/* scaled canvas — conn-svg lives INSIDE this so it scales with cards, no smear */
+#canvas{position:absolute;top:0;left:0;transform-origin:0 0;overflow:visible;}
+/* conn-svg inside canvas: positioned at 0,0, huge viewport, scales with canvas */
+#conn-svg{position:absolute;top:0;left:0;width:8000px;height:8000px;pointer-events:none;overflow:visible;}
+
+/* CARDS */
+.card{
+  position:absolute;width:175px;background:#fff;
+  border-radius:12px;
+  filter:drop-shadow(0 2px 8px var(--shadow));
+  user-select:none;-webkit-user-select:none;
+}
+/* .sel-ring: child div used for selection highlight.
+   Lives INSIDE the card so it's not clipped by the parent's filter context.
+   box-shadow/outline on the card itself gets eaten by filter:drop-shadow in Chrome/Safari. */
+.sel-ring{
+  display:none;position:absolute;inset:-3px;
+  border-radius:14px;pointer-events:none;z-index:10;
+}
+.card.selected    .sel-ring{display:block;border:2.5px solid var(--gold); background:rgba(196,151,42,0.07);}
+.card.in-selection .sel-ring{display:block;border:2px dashed var(--gold);background:rgba(196,151,42,0.05);}
+.card.drop-target  .sel-ring{display:block;border:2.5px solid var(--leaf);background:rgba(74,124,89,0.07);}
+
+.card-head{padding:10px 10px 8px;border-radius:10px 10px 0 0;display:flex;align-items:center;gap:8px;cursor:grab;}
+.card-head:active{cursor:grabbing;}
+.card-head.male  {background:linear-gradient(135deg,#3A6186,#5A84A8);}
+.card-head.female{background:linear-gradient(135deg,#8B4B6E,#B0718E);}
+.card-head.neutral{background:linear-gradient(135deg,#5A6B4A,#7A8F68);}
+
+.avatar{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;border:2px solid rgba(255,255,255,.4);}
+.avatar img{width:100%;height:100%;object-fit:cover;}
+.av-txt{font-family:'Playfair Display',serif;color:#fff;font-size:11px;font-weight:700;letter-spacing:-0.5px;}
+.card-name{font-family:'Playfair Display',serif;color:#fff;font-size:12px;font-weight:500;line-height:1.3;}
+.card-body{padding:6px 10px 4px;}
+.card-years{font-size:10px;color:var(--text2);margin-bottom:2px;}
+.card-role{font-size:10px;color:var(--leaf);font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
+.card-btns{display:flex;gap:3px;padding:0 6px 7px;}
+.cta{flex:1;padding:4px 2px;border:1px solid #e0d8cc;background:var(--cream);border-radius:5px;cursor:pointer;font-size:11px;color:var(--text2);transition:all .12s;}
+.cta:hover{background:var(--cream2);color:var(--bark);}
+
+/* NODE PORTS — visible dots on edges of each card for dragging connections */
+.ports{position:absolute;inset:0;pointer-events:none;}
+.port{
+  position:absolute;width:13px;height:13px;border-radius:50%;
+  background:#fff;
+  cursor:crosshair;pointer-events:all;
+  z-index:5;
+  transition:transform .12s;
+}
+/* vertical ports: parent/child = green */
+.port-t,.port-b{ border:2.5px solid var(--leaf); }
+.port-t:hover,.port-b:hover{ background:var(--leaf); transform:translateX(-50%) scale(1.5); }
+/* horizontal ports: couple/sibling = gold */
+.port-l,.port-r{ border:2.5px solid var(--gold); }
+.port-l:hover{ background:var(--gold); transform:translateY(-50%) scale(1.5); }
+.port-r:hover{ background:var(--gold); transform:translateY(-50%) scale(1.5); }
+/* positions */
+.port-t{top:-7px; left:50%; transform:translateX(-50%);}
+.port-b{bottom:-7px; left:50%; transform:translateX(-50%);}
+.port-l{left:-7px; top:50%; transform:translateY(-50%);}
+.port-r{right:-7px; top:50%; transform:translateY(-50%);}
+/* tooltip hints */
+.port[data-port="t"]::after{content:"Padre/Madre";position:absolute;bottom:18px;left:50%;transform:translateX(-50%);background:var(--bark2);color:#fff;font-size:9px;white-space:nowrap;padding:2px 5px;border-radius:3px;opacity:0;pointer-events:none;transition:opacity .15s;}
+.port[data-port="b"]::after{content:"Hijo/a";position:absolute;top:18px;left:50%;transform:translateX(-50%);background:var(--bark2);color:#fff;font-size:9px;white-space:nowrap;padding:2px 5px;border-radius:3px;opacity:0;pointer-events:none;transition:opacity .15s;}
+.port[data-port="l"]::after{content:"Pareja/Hermano";position:absolute;top:50%;right:18px;transform:translateY(-50%);background:var(--bark2);color:#fff;font-size:9px;white-space:nowrap;padding:2px 5px;border-radius:3px;opacity:0;pointer-events:none;transition:opacity .15s;}
+.port[data-port="r"]::after{content:"Pareja/Hermano";position:absolute;top:50%;left:18px;transform:translateY(-50%);background:var(--bark2);color:#fff;font-size:9px;white-space:nowrap;padding:2px 5px;border-radius:3px;opacity:0;pointer-events:none;transition:opacity .15s;}
+.port:hover::after{opacity:1;}
+
+/* CONN LEGEND */
+.legend{position:absolute;bottom:18px;left:14px;background:#fff;border-radius:9px;padding:8px 12px;box-shadow:0 2px 8px var(--shadow);font-size:11px;color:var(--text2);}
+.legend-row{display:flex;align-items:center;gap:6px;margin-bottom:3px;}
+.legend-row:last-child{margin-bottom:0;}
+.leg-line{width:24px;height:2px;border-radius:2px;}
+
+/* TOOLBAR */
+.toolbar{position:absolute;top:12px;left:12px;display:flex;gap:6px;z-index:5;}
+.tbtn{padding:6px 12px;background:#fff;border:1px solid #ddd;border-radius:7px;cursor:pointer;font-size:12px;font-family:'Lato',sans-serif;font-weight:700;color:var(--text2);box-shadow:0 2px 7px var(--shadow);transition:all .12s;}
+.tbtn:hover{background:var(--cream);color:var(--bark);}
+
+/* ZOOM */
+.zbts{position:absolute;bottom:18px;right:18px;display:flex;flex-direction:column;gap:4px;}
+.zbt{width:32px;height:32px;background:#fff;border:1px solid #ddd;border-radius:7px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 7px var(--shadow);transition:all .12s;color:var(--text);}
+.zbt:hover{background:var(--cream);}
+
+/* EMPTY */
+#empty{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;}
+#empty .ei{font-size:54px;opacity:.35;margin-bottom:10px;}
+#empty h2{font-family:'Playfair Display',serif;color:var(--text2);margin-bottom:5px;}
+#empty p{color:var(--text2);font-size:13px;}
+
+/* PANEL */
+#panel{width:310px;background:#fff;border-left:1px solid #ddd;display:flex;flex-direction:column;overflow:hidden;}
+.ph{padding:16px;background:var(--bark2);color:var(--cream);font-family:'Playfair Display',serif;font-size:14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.phx{background:none;border:none;color:var(--cream);cursor:pointer;font-size:20px;opacity:.7;padding:0 3px;line-height:1;}
+.phx:hover{opacity:1;}
+.pb{padding:16px;overflow-y:auto;flex:1;}
+.fg{margin-bottom:13px;}
+label{display:block;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+input[type=text],select,textarea{width:100%;padding:7px 10px;border:1.5px solid #e0d8cc;border-radius:7px;font-family:'Lato',sans-serif;font-size:13px;color:var(--text);background:var(--cream);outline:none;transition:border-color .15s;}
+input:focus,select:focus,textarea:focus{border-color:var(--gold);background:#fff;}
+textarea{resize:vertical;min-height:60px;}
+.rg{display:flex;gap:6px;}
+.ro{flex:1;padding:6px 4px;border:1.5px solid #e0d8cc;border-radius:7px;cursor:pointer;text-align:center;font-size:11px;font-weight:700;transition:all .12s;color:var(--text2);background:var(--cream);}
+.ro:hover{border-color:var(--gold);}
+.ro.sel.male  {background:var(--male);  border-color:var(--male);  color:#fff;}
+.ro.sel.female{background:var(--female);border-color:var(--female);color:#fff;}
+.ro.sel.neutral{background:var(--neutral);border-color:var(--neutral);color:#fff;}
+.divider{height:1px;background:#e8e0d4;margin:12px 0;}
+.dav-area{background:linear-gradient(135deg,var(--bark2),var(--bark));padding:20px;text-align:center;color:#fff;}
+.dav{width:66px;height:66px;border-radius:50%;margin:0 auto 9px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:24px;font-weight:700;border:3px solid var(--gold);overflow:hidden;}
+.dav img{width:100%;height:100%;object-fit:cover;}
+.dname{font-family:'Playfair Display',serif;font-size:17px;margin-bottom:2px;}
+.dsub{font-size:11px;opacity:.72;}
+.dbody{padding:14px;}
+.drow{display:flex;justify-content:space-between;margin-bottom:9px;font-size:12px;}
+.dlabel{color:var(--text2);font-weight:700;}
+.dval{color:var(--text);}
+.dbio{font-size:12px;color:var(--text2);line-height:1.6;margin-top:5px;}
+.clist{list-style:none;margin-top:4px;}
+.clist li{display:flex;align-items:center;justify-content:space-between;padding:6px 8px;background:var(--cream);border-radius:7px;margin-bottom:3px;font-size:12px;}
+.clist li .rx{background:none;border:none;cursor:pointer;color:#c0392b;font-size:14px;padding:0 3px;opacity:.55;}
+.clist li .rx:hover{opacity:1;}
+.mav{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;font-family:'Playfair Display',serif;color:#fff;flex-shrink:0;overflow:hidden;}
+.mav img{width:100%;height:100%;object-fit:cover;}
+.mav.male{background:var(--male);}.mav.female{background:var(--female);}.mav.neutral{background:var(--neutral);}
+.pu-area{border:2px dashed #ccc;border-radius:8px;padding:12px;text-align:center;cursor:pointer;background:var(--cream);font-size:12px;color:var(--text2);transition:all .12s;}
+.pu-area:hover{border-color:var(--gold);}
+.hint-box{background:#f0f7f3;border:1px solid #b2d4be;border-radius:8px;padding:10px 12px;font-size:12px;color:#2D5E3F;margin-bottom:12px;line-height:1.5;}
+
+/* MODALS */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center;}
+.overlay.open{display:flex;}
+.modal{background:#fff;border-radius:14px;padding:22px;width:360px;max-width:92vw;box-shadow:0 18px 55px rgba(0,0,0,.28);}
+.modal h3{font-family:'Playfair Display',serif;font-size:17px;margin-bottom:13px;}
+.modal-foot{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;}
+
+/* TOAST */
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(65px);background:var(--bark2);color:var(--cream);padding:8px 16px;border-radius:8px;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,.28);transition:transform .28s;z-index:999;pointer-events:none;}
+#toast.show{transform:translateX(-50%) translateY(0);}
+
+/* WIRE DRAWING CURSOR feedback */
+body.wiring *{cursor:crosshair!important;}
+body.wiring .port{background:var(--gold);border-color:var(--gold2);}
+
+/* MARQUEE SELECTION RECT */
+#marquee{
+  display:none;position:absolute;border:1.5px solid var(--gold);
+  background:rgba(196,151,42,0.08);border-radius:3px;pointer-events:none;z-index:20;
+}
+#cw.marquee-mode{cursor:crosshair;}
+
+/* selection handled by .sel-ring child div */
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🌳 <span>Árbol</span>Genealógico</div>
+  <div class="hbtns">
+    <button class="btn btn-ghost" onclick="exportData()">⬇ Exportar</button>
+    <button class="btn btn-ghost" onclick="document.getElementById('imp-file').click()">⬆ Importar</button>
+    <button class="btn btn-gold" onclick="openAddPanel()">+ Agregar persona</button>
+  </div>
+</header>
+
+<div class="workspace">
+  <div id="cw">
+    <!-- live wire while dragging — screen space -->
+    <svg id="wire-svg"></svg>
+    <!-- scaled canvas — conn-svg is inside so it transforms with cards -->
+    <div id="canvas">
+      <svg id="conn-svg"><defs></defs></svg>
+    </div>
+
+    <div class="toolbar">
+      <button class="tbtn" onclick="autoLayout()">🔀 Organizar</button>
+      <button class="tbtn" onclick="fitScreen()">⊞ Ajustar</button>
+    </div>
+
+    <div class="legend">
+      <div class="legend-row"><div class="leg-line" style="background:#4A7C59"></div> Padre → Hijo</div>
+      <div class="legend-row"><div class="leg-line" style="background:var(--c-pareja);border-top:2px dashed var(--c-pareja);height:0"></div> Pareja</div>
+      <div class="legend-row"><div class="leg-line" style="background:#3A6186;border-top:2px dashed #3A6186;height:0"></div> Hermano/a</div>
+      <div class="divider" style="margin:6px 0"></div>
+      <div class="legend-row" style="color:#aaa;font-size:10px">🖱️ Medio: mover canvas</div>
+      <div class="legend-row" style="color:#aaa;font-size:10px">⬜ Arrastrar: selección</div>
+      <div class="divider" style="margin:4px 0"></div>
+      <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--leaf);flex-shrink:0"></div><span style="font-size:10px;color:#888">↑ padre / ↓ hijo</span></div>
+      <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--gold);flex-shrink:0"></div><span style="font-size:10px;color:#888">← → pareja / hermano</span></div>
+      <div class="legend-row" style="color:#aaa;font-size:10px">2× clic: editar</div>
+    </div>
+
+    <div class="zbts">
+      <button class="zbt" onclick="doZoom(.15)">+</button>
+      <button class="zbt" onclick="doZoom(-.15)">−</button>
+      <button class="zbt" onclick="resetView()" style="font-size:12px">↺</button>
+    </div>
+
+    <div id="empty">
+      <div class="ei">🌳</div>
+      <h2>Tu árbol está vacío</h2>
+      <p>Hacé clic en <strong>+ Agregar persona</strong> para empezar</p>
+    </div>
+    <div id="marquee"></div>
+  </div>
+  <div id="panel" style="display:none"></div>
+</div>
+
+<!-- CONN ACTION MODAL -->
+<div class="overlay" id="conn-action-modal">
+  <div class="modal">
+    <h3 id="cam-title">Vínculo familiar</h3>
+    <p id="cam-sub" style="font-size:13px;color:var(--text2);margin-bottom:16px"></p>
+    <div class="fg">
+      <label>Cambiar tipo de relación</label>
+      <select id="cam-type">
+        <option value="padre">👨 Padre/Madre → Hijo/a</option>
+        <option value="pareja">💑 Pareja / Cónyuge</option>
+        <option value="hermano">👫 Hermano/a</option>
+      </select>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-red" style="margin-right:auto" onclick="connActionDelete()">🗑 Eliminar</button>
+      <button class="btn btn-ghost" style="color:var(--text2);border-color:#ccc" onclick="connActionCancel()">Cancelar</button>
+      <button class="btn btn-gold" onclick="connActionSave()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- WIRE RELATION MODAL -->
+<div class="overlay" id="rel-modal">
+  <div class="modal">
+    <h3 id="rel-modal-title">Tipo de relación</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px" id="rel-modal-sub"></p>
+    <div class="fg"><label>Relación</label>
+      <select id="rel-type">
+        <option value="padre">👨 <span id="a-name"></span> es Padre/Madre de <span id="b-name"></span></option>
+        <option value="hijo">👶 <span id="a-name2"></span> es Hijo/a de <span id="b-name2"></span></option>
+        <option value="pareja">💑 Son Pareja / Cónyuges</option>
+        <option value="hermano">👫 Son Hermanos/as</option>
+      </select>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" style="color:var(--text2);border-color:#ccc" onclick="cancelRel()">Cancelar</button>
+      <button class="btn btn-gold" onclick="confirmRel()">Vincular</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE MODAL -->
+<div class="overlay" id="del-modal">
+  <div class="modal" style="text-align:center">
+    <h3 id="del-title">Eliminar</h3>
+    <p style="color:var(--text2);font-size:13px">¿Eliminar <strong id="del-name"></strong>?</p>
+    <p id="del-sub" style="color:#c0392b;font-size:11px;margin-top:6px">También se borran todos sus vínculos.</p>
+    <div class="modal-foot" style="justify-content:center">
+      <button class="btn btn-ghost" style="color:var(--text2);border-color:#ccc" onclick="cancelDel()">Cancelar</button>
+      <button class="btn btn-red" onclick="confirmDel()">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<input type="file" id="imp-file" accept=".json" style="display:none" onchange="handleImport(event)">
+<input type="file" id="photo-file" accept="image/*" style="display:none" onchange="handlePhoto(event)">
+
+<script>
+/* ══════════════════════════════════════
+   STATE
+══════════════════════════════════════ */
+const S = {
+  people:{}, connections:[], nextId:1,
+  selectedId:null,
+  panelMode:null, editingId:null, photoData:null,
+  zoom:1, panX:60, panY:60,
+  panning:false, panStart:null,
+  // card drag
+  draggingCard:null, dragOffset:null, didDrag:false,
+  // wire drag
+  wiringFrom:null,   // {id, port}
+  wiringFromPort:null,
+  wiringTo:null,     // id | null
+  wireMouseX:0, wireMouseY:0,
+  // delete
+  deletingId:null, deletingConn:null,
+  // pending relation
+  relFrom:null, relTo:null,
+  // marquee selection
+  marquee:null,           // {x0,y0} start in screen coords relative to cw
+  selectedIds:new Set(),  // multi-selected card ids
+  // connection action
+  actionConnIdx:null,
+  _bulkDeleteIds:null,
+  _justMarqueed:false,
+};
+
+/* ══════════════════════════════════════
+   PERSIST
+══════════════════════════════════════ */
+function persist(){try{localStorage.setItem('gt3',JSON.stringify({people:S.people,connections:S.connections,nextId:S.nextId}));}catch(e){}}
+function loadData(){try{const d=JSON.parse(localStorage.getItem('gt3')||'null');if(d){S.people=d.people||{};S.connections=d.connections||[];S.nextId=d.nextId||1;}}catch(e){}}
+
+/* ══════════════════════════════════════
+   UTILS
+══════════════════════════════════════ */
+const uid=()=>'p'+(S.nextId++);
+const initials=n=>n.trim().split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
+const gc=g=>g==='masculino'?'male':g==='femenino'?'female':'neutral';
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// Build display name from parts; falls back to legacy p.name
+const fullName=p=>[p.firstName||p.name||'',p.middleName||'',p.lastName||''].filter(Boolean).join(' ').trim()||'Sin nombre';
+const cardInitials=p=>{
+  const parts=[p.firstName||p.name||'', p.middleName||'', p.lastName||''].filter(Boolean);
+  if(parts.length>=2) return parts.map(w=>w[0]).join('').slice(0,3).toUpperCase();
+  // fallback: split fullName
+  return fullName(p).split(/\s+/).map(w=>w[0]).join('').slice(0,3).toUpperCase();
+};
+
+const REL_COLOR ={pareja:'#C4972A', padre:'#4A7C59', hermano:'#3A6186'};
+const REL_DASH  ={pareja:'7 4',     padre:'none',    hermano:'5 4'};
+const REL_MARKER={pareja:'dot-y',   padre:'arr-g',   hermano:'dot-b'};
+
+function relLabel(type,fromId,toId){
+  const a=fullName(S.people[fromId])||'?', b=fullName(S.people[toId])||'?';
+  if(type==='pareja')  return 'Pareja';
+  if(type==='padre')   return 'Padre/Madre';
+  if(type==='hermano') return 'Hermano/a';
+  return type;
+}
+
+/* inverse relationship: if A is padre of B → B is hijo of A
+   We store connections as {from, to, type} where type is always canonical:
+   padre  = from is parent, to is child
+   pareja = symmetric
+   hermano= symmetric
+*/
+function inverseLabel(type){
+  if(type==='padre') return 'Hijo/a';
+  return relLabel(type,'','');
+}
+
+/* ══════════════════════════════════════
+   RENDER ALL
+══════════════════════════════════════ */
+function renderAll(){
+  document.getElementById('canvas').querySelectorAll('.card').forEach(c=>c.remove());
+  document.getElementById('empty').style.display=Object.keys(S.people).length?'none':'block';
+  for(const id in S.people) buildCard(id);
+  renderConns();
+}
+
+/* ══════════════════════════════════════
+   CARD
+══════════════════════════════════════ */
+function buildCard(id){
+  const p=S.people[id];
+  const canvas=document.getElementById('canvas');
+  let card=canvas.querySelector('[data-id="'+id+'"]');
+  if(!card){card=document.createElement('div');card.className='card';card.dataset.id=id;attachCard(card);canvas.appendChild(card);}
+  const g=gc(p.gender);
+  const av=p.photo?`<img src="${p.photo}" alt="">`:(`<span class="av-txt">${cardInitials(p)}</span>`);
+  const years=[p.birth,p.death].filter(Boolean).join(' – ');
+  card.style.left=(p.x||0)+'px'; card.style.top=(p.y||0)+'px';
+  card.classList.toggle('selected',S.selectedId===id||S.selectedIds.has(id));
+  card.innerHTML=`
+    <div class="sel-ring"></div>
+    <div class="ports">
+      <div class="port port-t" data-port="t" data-id="${id}"></div>
+      <div class="port port-b" data-port="b" data-id="${id}"></div>
+      <div class="port port-l" data-port="l" data-id="${id}"></div>
+      <div class="port port-r" data-port="r" data-id="${id}"></div>
+    </div>
+    <div class="card-head ${g}" data-drag="${id}">
+      <div class="avatar">${av}</div>
+      <div class="card-name">${esc(fullName(p))}</div>
+    </div>
+    <div class="card-body">
+      ${years?`<div class="card-years">${years}</div>`:''}
+      ${p.role?`<div class="card-role">${esc(p.role)}</div>`:''}
+    </div>
+    <div class="card-btns">
+      <button class="cta" data-action="edit">✏️</button>
+      <button class="cta" data-action="view">👁</button>
+      <button class="cta" data-action="del">🗑</button>
+    </div>`;
+  // port mouse events
+  card.querySelectorAll('.port').forEach(attachPort);
+}
+
+function attachCard(card){
+  card.addEventListener('mousedown',onCardMD);
+  card.addEventListener('click',onCardClick);
+  card.addEventListener('dblclick',onCardDblClick);
+}
+
+function onCardDblClick(e){
+  if(e.target.closest('.port'))return;
+  if(e.target.dataset.action)return;
+  e.stopPropagation();
+  const id=this.dataset.id;
+  openEditPanel(id);
+}
+
+function onCardMD(e){
+  if(e.button!==0)return; // only left button drags cards
+  const drag=e.target.closest('[data-drag]');
+  if(!drag)return;
+  e.stopPropagation();
+  const id=drag.dataset.drag;
+  S.draggingCard=id; S.didDrag=false;
+  const p=S.people[id];
+  const wx=(e.clientX-S.panX)/S.zoom, wy=(e.clientY-S.panY)/S.zoom;
+  S.dragOffset={x:wx-(p.x||0), y:wy-(p.y||0)};
+  document.body.classList.add('no-select');
+}
+function onCardClick(e){
+  if(e.target.closest('.port'))return;
+  const action=e.target.dataset.action;
+  const id=this.dataset.id;
+  e.stopPropagation();
+  if(action==='edit'){openEditPanel(id);return;}
+  if(action==='view'){openDetailPanel(id);return;}
+  if(action==='del') {askDelete(id);return;}
+  if(!S.didDrag){selectCard(id);openDetailPanel(id);}
+}
+
+/* ══════════════════════════════════════
+   PORTS (wire dragging)
+══════════════════════════════════════ */
+function attachPort(port){
+  port.addEventListener('mousedown',onPortMD);
+}
+
+function onPortMD(e){
+  e.stopPropagation(); e.preventDefault();
+  const id=e.target.dataset.id, portSide=e.target.dataset.port;
+  S.wiringFrom={id,port:portSide};
+  S.wiringFromPort=portSide;
+  const r=document.getElementById('cw').getBoundingClientRect();
+  S.wireMouseX=e.clientX-r.left; S.wireMouseY=e.clientY-r.top;
+  document.body.classList.add('wiring','no-select');
+  drawWire();
+}
+
+function portScreenPos(id,port){
+  const p=S.people[id]; if(!p)return{x:0,y:0};
+  // Use actual card DOM rect for accurate size
+  const card=document.querySelector('[data-id="'+id+'"]');
+  const cwRect=document.getElementById('cw').getBoundingClientRect();
+  if(card){
+    const r=card.getBoundingClientRect();
+    const lx=r.left-cwRect.left, ty=r.top-cwRect.top;
+    const rw=r.width, rh=r.height;
+    if(port==='t') return{x:lx+rw/2, y:ty};
+    if(port==='b') return{x:lx+rw/2, y:ty+rh};
+    if(port==='l') return{x:lx,       y:ty+rh/2};
+    if(port==='r') return{x:lx+rw,    y:ty+rh/2};
+    return{x:lx+rw/2, y:ty+rh/2};
+  }
+  // fallback: compute from canvas coords
+  const cx=(p.x||0)*S.zoom+S.panX, cy=(p.y||0)*S.zoom+S.panY;
+  const cw2=175*S.zoom, ch2=115*S.zoom;
+  if(port==='t') return{x:cx+cw2/2, y:cy};
+  if(port==='b') return{x:cx+cw2/2, y:cy+ch2};
+  if(port==='l') return{x:cx,        y:cy+ch2/2};
+  if(port==='r') return{x:cx+cw2,    y:cy+ch2/2};
+  return{x:cx+cw2/2,y:cy+ch2/2};
+}
+
+function nearestPort(cardId, mx, my){
+  const ports=['t','b','l','r'];
+  let best=null, bestD=Infinity;
+  for(const p of ports){const pos=portScreenPos(cardId,p);const d=Math.hypot(pos.x-mx,pos.y-my);if(d<bestD){bestD=d;best=p;}}
+  return best;
+}
+
+function drawWire(){
+  const svg=document.getElementById('wire-svg');
+  svg.innerHTML='';
+  if(!S.wiringFrom)return;
+  const port=S.wiringFrom.port;
+  const isVertical=(port==='t'||port==='b');
+  const wireCol=isVertical?'#4A7C59':'#C4972A';
+  const from=portScreenPos(S.wiringFrom.id, port);
+  const tx=S.wireMouseX, ty=S.wireMouseY;
+  // orthogonal wire: L-shaped
+  let d;
+  if(isVertical){
+    const midy=(from.y+ty)/2;
+    d=`M${from.x},${from.y} L${from.x},${midy} L${tx},${midy} L${tx},${ty}`;
+  } else {
+    const midx=(from.x+tx)/2;
+    d=`M${from.x},${from.y} L${midx},${from.y} L${midx},${ty} L${tx},${ty}`;
+  }
+  const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+  path.setAttribute('d',d);
+  path.setAttribute('stroke',wireCol);
+  path.setAttribute('stroke-width','2');
+  path.setAttribute('stroke-dasharray','6 3');
+  path.setAttribute('fill','none');
+  path.setAttribute('opacity','0.85');
+  svg.appendChild(path);
+
+}
+
+/* ══════════════════════════════════════
+   CONNECTIONS SVG
+══════════════════════════════════════ */
+function portCanvasPos(id, port){
+  const p=S.people[id]; if(!p)return{x:0,y:0};
+  const card=document.querySelector('[data-id="'+id+'"]');
+  const ch=card ? card.offsetHeight : 115;
+  const cx=p.x||0, cy=p.y||0;
+  if(port==='t') return{x:cx+87.5, y:cy};
+  if(port==='b') return{x:cx+87.5, y:cy+ch};
+  if(port==='l') return{x:cx,       y:cy+ch/2};
+  if(port==='r') return{x:cx+175,   y:cy+ch/2};
+  return{x:cx+87.5, y:cy+ch/2};
+}
+
+function renderConns(){
+  const svg=document.getElementById('conn-svg');
+  [...svg.querySelectorAll('path,text,rect,line,polyline')].forEach(el=>el.remove());
+
+  // ── Collect parent→children groups ─────────────────────────
+  // For padre connections, draw orthogonal tree lines:
+  // Each unique set of parents shares a horizontal "bus" bar,
+  // and all children of that group drop down from it.
+
+  // Build map: parentKey → {parents:[id], children:[id]}
+  // parentKey = sorted parent ids joined
+  const parentGroups = {}; // key → {parents, children}
+
+  // Also track which connections are padre vs pareja/hermano
+  const padreConns  = S.connections.filter(c=>c.type==='padre');
+  const lateralConns= S.connections.filter(c=>c.type!=='padre');
+
+  // Group children by their parent set
+  padreConns.forEach(c=>{
+    // find all parents of c.to
+    const childParents = padreConns
+      .filter(x=>x.to===c.to)
+      .map(x=>x.from)
+      .sort()
+      .join(',');
+    if(!parentGroups[childParents])
+      parentGroups[childParents]={parents:childParents.split(','), children:[]};
+    if(!parentGroups[childParents].children.includes(c.to))
+      parentGroups[childParents].children.push(c.to);
+  });
+
+  const col_padre  = '#4A7C59';
+  const col_pareja = '#C4972A';
+  const col_hermano= '#3A6186';
+
+  // ── Draw padre connections: orthogonal tree style ───────────
+  Object.values(parentGroups).forEach(({parents, children})=>{
+    if(!parents[0]||!children.length)return;
+    const validParents = parents.filter(id=>S.people[id]);
+    const validChildren= children.filter(id=>S.people[id]);
+    if(!validParents.length||!validChildren.length)return;
+
+    // Parent exit points (bottom port)
+    const parentPts = validParents.map(id=>portCanvasPos(id,'b'));
+    // Child entry points (top port)
+    const childPts  = validChildren.map(id=>portCanvasPos(id,'t'));
+
+    // Midpoint Y between parents and children
+    const parentBottomY = Math.max(...parentPts.map(p=>p.y));
+    const childTopY     = Math.min(...childPts.map(p=>p.y));
+    const busY = parentBottomY + (childTopY - parentBottomY) * 0.5;
+
+    // Horizontal bus: from leftmost to rightmost point
+    const allX = [...parentPts.map(p=>p.x), ...childPts.map(p=>p.x)];
+    const busX1 = Math.min(...allX);
+    const busX2 = Math.max(...allX);
+
+    // Draw: each parent → vertical line down to bus
+    validParents.forEach((id, i)=>{
+      const pt = parentPts[i];
+      const line = mkLine(pt.x, pt.y, pt.x, busY, col_padre, 2);
+      svg.appendChild(line);
+    });
+
+    // Draw horizontal bus bar
+    if(busX1 < busX2){
+      const bus = mkLine(busX1, busY, busX2, busY, col_padre, 2);
+      svg.appendChild(bus);
+    }
+
+    // Draw: each child → vertical line up from bus
+    validChildren.forEach((id, i)=>{
+      const pt = childPts[i];
+      const line = mkLine(pt.x, busY, pt.x, pt.y, col_padre, 2);
+      svg.appendChild(line);
+
+    });
+
+
+
+    // "Padre/Madre" label on the bus midpoint
+    const lx=(busX1+busX2)/2, ly=busY;
+    svg.appendChild(mkLabel(lx, ly-7, 'Padre/Madre', col_padre));
+
+    // Clickable hit area along bus and verticals for each connection
+    // We store a hit rect over the whole bus area
+    const hitIdx = S.connections.findIndex(c=>
+      c.type==='padre' && validParents.includes(c.from) && validChildren.includes(c.to)
+    );
+    if(hitIdx>=0){
+      const hit = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      hit.setAttribute('x',busX1-8); hit.setAttribute('y',busY-8);
+      hit.setAttribute('width',Math.max(busX2-busX1+16,16));
+      hit.setAttribute('height',16);
+      hit.setAttribute('fill','transparent'); hit.setAttribute('cursor','pointer');
+      hit.setAttribute('pointer-events','all');
+      hit.dataset.connIdx=hitIdx;
+      hit.addEventListener('click',onConnClick);
+      svg.appendChild(hit);
+    }
+  });
+
+  // ── Draw lateral connections: straight horizontal with mid-elbow ──
+  lateralConns.forEach((conn,_)=>{
+    const i = S.connections.indexOf(conn);
+    const a=S.people[conn.from], b=S.people[conn.to];
+    if(!a||!b)return;
+    const col  = conn.type==='pareja'?col_pareja:col_hermano;
+    const dash = conn.type==='pareja'?'7 4':'5 4';
+    const acx=(a.x||0)+87.5, bcx=(b.x||0)+87.5;
+    const ap = acx<=bcx?'r':'l';
+    const bp = acx<=bcx?'l':'r';
+    const fp = portCanvasPos(conn.from, ap);
+    const tp = portCanvasPos(conn.to,   bp);
+
+    // straight horizontal line with a small vertical jog if they're not at same Y
+    const midX = (fp.x+tp.x)/2;
+    let d;
+    if(Math.abs(fp.y-tp.y)<5){
+      // same row: pure horizontal
+      d=`M${fp.x},${fp.y} L${tp.x},${tp.y}`;
+    } else {
+      // different rows: elbow
+      d=`M${fp.x},${fp.y} L${midX},${fp.y} L${midX},${tp.y} L${tp.x},${tp.y}`;
+    }
+
+    // hit path
+    const hit=document.createElementNS('http://www.w3.org/2000/svg','path');
+    hit.setAttribute('d',d); hit.setAttribute('stroke','transparent');
+    hit.setAttribute('stroke-width','14'); hit.setAttribute('fill','none');
+    hit.setAttribute('cursor','pointer'); hit.setAttribute('pointer-events','stroke');
+    hit.dataset.connIdx=i;
+    hit.addEventListener('click',onConnClick);
+    svg.appendChild(hit);
+
+    // visible path
+    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d',d); path.setAttribute('stroke',col);
+    path.setAttribute('stroke-width','2'); path.setAttribute('fill','none');
+    if(dash!=='none') path.setAttribute('stroke-dasharray',dash);
+    path.setAttribute('pointer-events','none');
+    svg.appendChild(path);
+
+
+
+    // label
+    svg.appendChild(mkLabel((fp.x+tp.x)/2,(fp.y+tp.y)/2-7,
+      conn.type==='pareja'?'Pareja':'Hermano/a', col));
+  });
+}
+
+// ── SVG helpers ─────────────────────────────────────────────
+function mkLine(x1,y1,x2,y2,col,w){
+  const l=document.createElementNS('http://www.w3.org/2000/svg','line');
+  l.setAttribute('x1',x1);l.setAttribute('y1',y1);
+  l.setAttribute('x2',x2);l.setAttribute('y2',y2);
+  l.setAttribute('stroke',col);l.setAttribute('stroke-width',w);
+  l.setAttribute('pointer-events','none');
+  return l;
+}
+
+function mkLabel(x,y,text,col){
+  const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+  t.setAttribute('x',x);t.setAttribute('y',y);
+  t.setAttribute('text-anchor','middle');t.setAttribute('font-size','9');
+  t.setAttribute('fill',col);t.setAttribute('font-family','Lato,sans-serif');
+  t.setAttribute('font-weight','700');t.setAttribute('pointer-events','none');
+  t.setAttribute('paint-order','stroke');
+  t.setAttribute('stroke','var(--cream)');t.setAttribute('stroke-width','3');
+  t.setAttribute('stroke-linejoin','round');
+  t.textContent=text;
+  return t;
+}
+
+function onConnClick(e){
+  e.stopPropagation();
+  const i=parseInt(this.dataset.connIdx);
+  const conn=S.connections[i];
+  if(!conn)return;
+  S.actionConnIdx=i;
+  const a=fullName(S.people[conn.from])||'?', b=fullName(S.people[conn.to])||'?';
+  document.getElementById('cam-title').textContent='Vínculo familiar';
+  document.getElementById('cam-sub').textContent=a+' ↔ '+b;
+  // set select to current type
+  const sel=document.getElementById('cam-type');
+  sel.value=conn.type==='hijo'?'padre':conn.type; // canonical
+  document.getElementById('conn-action-modal').classList.add('open');
+}
+function connActionCancel(){
+  document.getElementById('conn-action-modal').classList.remove('open');
+  S.actionConnIdx=null;
+}
+function connActionSave(){
+  const i=S.actionConnIdx; if(i===null)return;
+  S.connections[i].type=document.getElementById('cam-type').value;
+  renderConns();persist();
+  connActionCancel();
+  toast('Vínculo actualizado ✓');
+}
+function connActionDelete(){
+  const i=S.actionConnIdx; if(i===null)return;
+  connActionCancel();
+  // reuse delete modal
+  S.deletingConn=i; S.deletingId=null;
+  const conn=S.connections[i];
+  const a=fullName(S.people[conn.from])||'?', b=fullName(S.people[conn.to])||'?';
+  document.getElementById('del-title').textContent='Eliminar vínculo';
+  document.getElementById('del-name').textContent='el vínculo entre "'+a+'" y "'+b+'"';
+  document.getElementById('del-sub').style.display='none';
+  document.getElementById('del-modal').classList.add('open');
+}
+
+/* ══════════════════════════════════════
+   GLOBAL MOUSE EVENTS
+══════════════════════════════════════ */
+const cwEl=document.getElementById('cw');
+
+// panning — middle button; marquee — left button on empty canvas
+cwEl.addEventListener('mousedown',e=>{
+  if(e.button===1){
+    e.preventDefault();
+    S.panning=true; S.panStart={x:e.clientX-S.panX,y:e.clientY-S.panY};
+    cwEl.classList.add('panning');
+    document.body.classList.add('no-select');
+    return;
+  }
+  if(e.button===0){
+    // left on empty canvas (not card, not port, not cable) → start marquee
+    if(e.target.closest('.card')||e.target.closest('.port'))return;
+    if(S.wiringFrom)return;
+    document.body.classList.add('no-select');
+    e.preventDefault(); // prevent browser text selection during marquee
+    const r=cwEl.getBoundingClientRect();
+    const sx=e.clientX-r.left, sy=e.clientY-r.top;
+    S.marquee={x0:sx,y0:sy,x1:sx,y1:sy};
+    const m=document.getElementById('marquee');
+    m.style.display='block';m.style.left=sx+'px';m.style.top=sy+'px';
+    m.style.width='0';m.style.height='0';
+    cwEl.classList.add('marquee-mode'); // also disables conn-svg pointer-events via CSS
+  }
+});
+
+window.addEventListener('mousemove',e=>{
+  // card drag
+  if(S.draggingCard){
+    const p=S.people[S.draggingCard];
+    const nx=(e.clientX-S.panX)/S.zoom-S.dragOffset.x;
+    const ny=(e.clientY-S.panY)/S.zoom-S.dragOffset.y;
+    const ddx=nx-(p.x||0), ddy=ny-(p.y||0);
+    if(Math.abs(ddx)>2||Math.abs(ddy)>2)S.didDrag=true;
+    // move all selected cards together if dragging within selection
+    const moveIds=(S.selectedIds.size>1&&S.selectedIds.has(S.draggingCard))?[...S.selectedIds]:[S.draggingCard];
+    moveIds.forEach(id=>{
+      const pp=S.people[id]; if(!pp)return;
+      if(id===S.draggingCard){pp.x=nx;pp.y=ny;}
+      else{pp.x=(pp.x||0)+ddx;pp.y=(pp.y||0)+ddy;}
+      const c=document.querySelector('[data-id="'+id+'"]');
+      if(c){c.style.left=pp.x+'px';c.style.top=pp.y+'px';}
+    });
+    renderConns(); return;
+  }
+  // wire drag
+  if(S.wiringFrom){
+    const _r=cwEl.getBoundingClientRect();
+    S.wireMouseX=e.clientX-_r.left; S.wireMouseY=e.clientY-_r.top;
+    const target=findCardUnderMouse(S.wireMouseX,S.wireMouseY);
+    document.querySelectorAll('.card').forEach(c=>c.classList.toggle('drop-target',c.dataset.id===target&&target!==S.wiringFrom.id));
+    S.wiringTo=target&&target!==S.wiringFrom.id?target:null;
+    drawWire(); return;
+  }
+  // marquee
+  if(S.marquee){
+    const r=cwEl.getBoundingClientRect();
+    S.marquee.x1=e.clientX-r.left; S.marquee.y1=e.clientY-r.top;
+    const mx=Math.min(S.marquee.x0,S.marquee.x1), my=Math.min(S.marquee.y0,S.marquee.y1);
+    const mw=Math.abs(S.marquee.x1-S.marquee.x0), mh=Math.abs(S.marquee.y1-S.marquee.y0);
+    const m=document.getElementById('marquee');
+    m.style.left=mx+'px'; m.style.top=my+'px';
+    m.style.width=mw+'px'; m.style.height=mh+'px';
+    // highlight cards inside marquee (in canvas space)
+    const cx0=(mx-S.panX)/S.zoom, cy0=(my-S.panY)/S.zoom;
+    const cx1=(mx+mw-S.panX)/S.zoom, cy1=(my+mh-S.panY)/S.zoom;
+    document.querySelectorAll('.card').forEach(c=>{
+      const p=S.people[c.dataset.id]; if(!p)return;
+      const inside=p.x+175>cx0&&p.x<cx1&&p.y+110>cy0&&p.y<cy1;
+      if(inside){ c.classList.add('in-selection'); c.classList.remove('selected'); }
+      else      { c.classList.remove('in-selection'); }
+    });
+    return;
+  }
+  // pan
+  if(S.panning){S.panX=e.clientX-S.panStart.x;S.panY=e.clientY-S.panStart.y;applyTransform();}
+});
+
+window.addEventListener('mouseup',e=>{
+  if(S.draggingCard){persist();S.draggingCard=null;S.dragOffset=null;}
+  if(S.wiringFrom){
+    document.body.classList.remove('wiring');
+    document.querySelectorAll('.card').forEach(c=>c.classList.remove('drop-target'));
+    document.getElementById('wire-svg').innerHTML='';
+    const _toId=S.wiringTo;
+    const _fromId=S.wiringFrom.id;
+    S.wiringFrom=null; S.wiringTo=null;
+    if(_toId){ openRelModal(_fromId, _toId); }
+    else { S.wiringFromPort=null; }
+  }
+  if(S.marquee){
+    // commit selection
+    const mx=Math.min(S.marquee.x0,S.marquee.x1), my=Math.min(S.marquee.y0,S.marquee.y1);
+    const mw=Math.abs(S.marquee.x1-S.marquee.x0), mh=Math.abs(S.marquee.y1-S.marquee.y0);
+    const cx0=(mx-S.panX)/S.zoom, cy0=(my-S.panY)/S.zoom;
+    const cx1=(mx+mw-S.panX)/S.zoom, cy1=(my+mh-S.panY)/S.zoom;
+    S.selectedIds.clear();
+    if(mw>4||mh>4){ // only if actually dragged
+      document.querySelectorAll('.card').forEach(c=>{
+        const p=S.people[c.dataset.id]; if(!p)return;
+        const inside=p.x+175>cx0&&p.x<cx1&&p.y+110>cy0&&p.y<cy1;
+        c.classList.toggle('selected',inside);
+        c.classList.remove('in-selection');
+        if(inside)S.selectedIds.add(c.dataset.id);
+      });
+      if(S.selectedIds.size>0){
+        // set selectedId to first one for keyboard delete compatibility
+        S.selectedId=[...S.selectedIds][0];
+        toast(S.selectedIds.size+' nodo'+(S.selectedIds.size>1?'s':'')+' seleccionado'+(S.selectedIds.size>1?'s':''));
+      }
+    } else {
+      // tiny drag = click: deselect all
+      document.querySelectorAll('.card').forEach(c=>{c.classList.remove('selected','in-selection');});
+      S.selectedId=null; S.selectedIds.clear();
+    }
+    document.getElementById('marquee').style.display='none';
+    cwEl.classList.remove('marquee-mode');
+    S.marquee=null;
+    if(S.selectedIds.size>0) S._justMarqueed=true; // block the upcoming click from clearing selection
+  }
+  if(S.panning){ S.panning=false; cwEl.classList.remove('panning'); }
+  document.body.classList.remove('no-select');
+});
+
+cwEl.addEventListener('auxclick',e=>{e.preventDefault();});
+cwEl.addEventListener('dblclick',e=>{
+  if(e.target.closest('.card')||e.target.closest('.port'))return;
+  openAddPanel();
+});
+cwEl.addEventListener('click',e=>{
+  if(S._justMarqueed){ S._justMarqueed=false; return; }
+  // deselect if clicking on empty canvas (not a card, not a hit path)
+  if(!e.target.closest('.card') && !e.target.dataset.connIdx){
+    S.selectedId=null; S.selectedIds.clear();
+    document.querySelectorAll('.card').forEach(c=>c.classList.remove('selected'));
+  }
+});
+cwEl.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const d=e.deltaY>0?-.1:.1;
+  const nz=Math.max(.2,Math.min(2.5,S.zoom+d));
+  const r=cwEl.getBoundingClientRect();
+  const mx=e.clientX-r.left,my=e.clientY-r.top;
+  S.panX=mx-(mx-S.panX)*(nz/S.zoom);S.panY=my-(my-S.panY)*(nz/S.zoom);S.zoom=nz;
+  applyTransform();
+},{passive:false});
+
+function findCardUnderMouse(mx,my){
+  // mx,my are already relative to cw container
+  const cx=(mx-S.panX)/S.zoom, cy=(my-S.panY)/S.zoom;
+  for(const id in S.people){
+    const p=S.people[id];
+    if(cx>=(p.x||0)&&cx<=(p.x||0)+175&&cy>=(p.y||0)&&cy<=(p.y||0)+115)return id;
+  }
+  return null;
+}
+
+/* ══════════════════════════════════════
+   TRANSFORM
+══════════════════════════════════════ */
+function applyTransform(){
+  document.getElementById('canvas').style.transform=`translate(${S.panX}px,${S.panY}px) scale(${S.zoom})`;
+  // conn-svg is inside canvas, scales automatically — no renderConns needed on pan/zoom
+}
+function doZoom(d){
+  const nz=Math.max(.2,Math.min(2.5,S.zoom+d));
+  const r=cwEl.getBoundingClientRect();
+  S.panX=r.width/2-(r.width/2-S.panX)*(nz/S.zoom);
+  S.panY=r.height/2-(r.height/2-S.panY)*(nz/S.zoom);
+  S.zoom=nz;applyTransform();
+}
+function resetView(){S.zoom=1;S.panX=60;S.panY=60;applyTransform();}
+function fitScreen(){
+  const ids=Object.keys(S.people);if(!ids.length)return;
+  let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
+  for(const id of ids){const p=S.people[id];mnx=Math.min(mnx,p.x||0);mny=Math.min(mny,p.y||0);mxx=Math.max(mxx,(p.x||0)+175);mxy=Math.max(mxy,(p.y||0)+120);}
+  const r=cwEl.getBoundingClientRect(),pad=60;
+  const sx=(r.width-2*pad)/(mxx-mnx||1),sy=(r.height-2*pad)/(mxy-mny||1);
+  S.zoom=Math.max(.2,Math.min(2,Math.min(sx,sy)));
+  S.panX=pad-mnx*S.zoom;S.panY=pad-mny*S.zoom;applyTransform();
+}
+function autoLayout(){
+  var ids = Object.keys(S.people);
+  if(!ids.length) return;
+
+  var CW=210, CH=170, PAD=60;
+
+  // Build maps
+  var coupleOf={}, childrenOf={}, parentsOf={};
+  ids.forEach(function(id){ childrenOf[id]=[]; parentsOf[id]=[]; });
+  S.connections.forEach(function(c){
+    if(c.type==='pareja'){
+      coupleOf[c.from]=c.to; coupleOf[c.to]=c.from;
+    } else if(c.type==='padre'){
+      if(!childrenOf[c.from].includes(c.to)) childrenOf[c.from].push(c.to);
+      if(!parentsOf[c.to].includes(c.from))  parentsOf[c.to].push(c.from);
+    }
+  });
+
+  // Step 1: assign generation
+  // A child's generation = max(parent generations) + 1
+  // Partners share the same generation
+  // Use iterative relaxation until stable
+  var gen={};
+  ids.forEach(function(id){ gen[id]=0; });
+
+  var changed=true;
+  var iterations=0;
+  while(changed && iterations<50){
+    changed=false; iterations++;
+    ids.forEach(function(id){
+      // children must be strictly below ALL parents
+      parentsOf[id].forEach(function(pid){
+        if(gen[id] <= gen[pid]){
+          gen[id] = gen[pid]+1;
+          changed=true;
+        }
+      });
+    });
+    // partners must be on the same row — use max of the two
+    ids.forEach(function(id){
+      var p=coupleOf[id];
+      if(p===undefined) return;
+      var maxG=Math.max(gen[id], gen[p]);
+      if(gen[id]!==maxG){ gen[id]=maxG; changed=true; }
+      if(gen[p]!==maxG){ gen[p]=maxG; changed=true; }
+    });
+  }
+
+  // Step 2: build ordered flat array per generation
+  var byGen={};
+  ids.forEach(function(id){
+    var g=gen[id];
+    if(!byGen[g]) byGen[g]=[];
+    byGen[g].push(id);
+  });
+  var gens=Object.keys(byGen).map(Number).sort(function(a,b){return a-b;});
+
+  var flatGen={};
+  gens.forEach(function(g){
+    var members=byGen[g];
+    var placed=new Set();
+    var result=[];
+
+    var placeNode=function(id){
+      if(placed.has(id)) return;
+      placed.add(id); result.push(id);
+      var p=coupleOf[id];
+      if(p && members.includes(p) && !placed.has(p)){
+        placed.add(p); result.push(p);
+      }
+    };
+
+    // Group by parent-key so siblings cluster together
+    var pkGroups={};
+    members.forEach(function(id){
+      if(parentsOf[id].length===0) return;
+      var k=parentsOf[id].slice().sort().join('|');
+      if(!pkGroups[k]) pkGroups[k]=[];
+      pkGroups[k].push(id);
+    });
+    Object.values(pkGroups).forEach(function(grp){
+      grp.forEach(function(id){ placeNode(id); });
+    });
+
+    // Remaining (no parents in this gen): insert before their partner
+    members.forEach(function(id){
+      if(placed.has(id)) return;
+      var p=coupleOf[id];
+      if(p && placed.has(p)){
+        var idx=result.indexOf(p);
+        placed.add(id);
+        result.splice(idx, 0, id); // insert LEFT of partner
+      } else {
+        placeNode(id);
+      }
+    });
+
+    flatGen[g]=result;
+  });
+
+  // Step 3: assign X bottom-up, center parents over children
+  var posX={};
+
+  var gensRev=gens.slice().reverse();
+  gensRev.forEach(function(g){
+    var order=flatGen[g];
+    var cursor=PAD;
+    var gdone=new Set();
+
+    order.forEach(function(id){
+      if(gdone.has(id)) return;
+
+      // Build group: same parent-key + their partners
+      var grp=[id]; gdone.add(id);
+      var myKey=parentsOf[id].slice().sort().join('|');
+
+      order.forEach(function(other){
+        if(gdone.has(other)) return;
+        var ok=parentsOf[other].slice().sort().join('|');
+        var sameParents=(myKey && myKey===ok);
+        var isPartnerOfGroup=grp.some(function(g){ return coupleOf[g]===other; });
+        if(sameParents||isPartnerOfGroup){ grp.push(other); gdone.add(other); }
+      });
+
+      // Collect all children of group
+      var allCh=[];
+      grp.forEach(function(gid){
+        childrenOf[gid].forEach(function(c){
+          if(!allCh.includes(c)) allCh.push(c);
+        });
+      });
+      var chX=allCh.filter(function(c){ return posX[c]!==undefined; })
+                   .map(function(c){ return posX[c]; });
+
+      var left;
+      if(chX.length>0){
+        var minCh=Math.min.apply(null,chX);
+        var maxCh=Math.max.apply(null,chX);
+        var childCenter=(minCh+maxCh+CW)/2;
+        left=childCenter-(grp.length*CW)/2;
+        if(left<cursor) left=cursor;
+      } else {
+        left=cursor;
+      }
+
+      // Place in flatGen order
+      var ordered=order.filter(function(oid){ return grp.includes(oid); });
+      ordered.forEach(function(oid,i){ posX[oid]=left+i*CW; });
+      cursor=left+grp.length*CW+20;
+    });
+  });
+
+  // Step 4: apply
+  ids.forEach(function(id){
+    S.people[id].x = posX[id]!==undefined ? posX[id] : PAD;
+    S.people[id].y = PAD + gen[id]*CH;
+  });
+
+  renderAll(); persist(); fitScreen(); toast('Árbol organizado ✓');
+}
+
+/* ══════════════════════════════════════
+   SELECT
+══════════════════════════════════════ */
+function selectCard(id){
+  S.selectedId=id;
+  S.selectedIds.clear(); if(id)S.selectedIds.add(id);
+  document.querySelectorAll('.card').forEach(function(c){ c.classList.toggle('selected',c.dataset.id===id||S.selectedIds.has(c.dataset.id)); });
+}
+
+/* ══════════════════════════════════════
+   PANELS
+══════════════════════════════════════ */
+function closePanel(){document.getElementById('panel').style.display='none';S.panelMode=null;S.editingId=null;S.photoData=null;}
+function openAddPanel(){S.panelMode='add';S.editingId=null;S.photoData=null;showPanel('Nueva Persona',formHTML(null));bindRadio();bindFormKeys();}
+function openEditPanel(id){S.panelMode='edit';S.editingId=id;S.photoData=S.people[id]&&S.people[id].photo||null;selectCard(id);showPanel('Editar Persona',formHTML(S.people[id]));bindRadio();bindFormKeys();}
+function bindFormKeys(){
+  document.getElementById('panel').querySelectorAll('input[type=text]').forEach(function(inp){
+    inp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();savePerson();}});
+  });
+  var ni=document.getElementById('f-firstname');if(ni){ni.focus();ni.select();}
+}
+
+function openDetailPanel(id){
+  if(!S.people[id])return;
+  selectCard(id);
+  var p=S.people[id];
+  var conns=S.connections.filter(function(c){return c.from===id||c.to===id;}).map(function(c){
+    var oid=c.from===id?c.to:c.from;
+    var o=S.people[oid];if(!o)return null;
+    var lbl;
+    if(c.type==='pareja')  lbl='Pareja';
+    else if(c.type==='hermano') lbl='Hermano/a';
+    else if(c.type==='padre') lbl=c.from===id?'Padre/Madre de':'Hijo/a de';
+    return{c:c,o:o,oid:oid,lbl:lbl};
+  }).filter(Boolean);
+  var av=p.photo?('<img src="'+p.photo+'" alt="">'):('<span style="font-family:\'Playfair Display\',serif;font-size:17px;font-weight:700;color:#fff;letter-spacing:-0.5px">'+cardInitials(p)+'</span>');
+  var body='<div class="dav-area">'+
+    '<div class="dav">'+av+'</div>'+
+    '<div class="dname">'+esc(fullName(p))+'</div>'+
+    '<div class="dsub">'+esc(p.role||({masculino:'👨',femenino:'👩',otro:'🧑'}[p.gender]||'🧑'))+'</div>'+
+    '</div>'+
+    '<div class="dbody">'+
+    (p.birth?'<div class="drow"><span class="dlabel">Nacimiento</span><span class="dval">'+p.birth+(p.birthplace?' · '+esc(p.birthplace):'')+'</span></div>':'')+
+    (p.death?'<div class="drow"><span class="dlabel">Fallecimiento</span><span class="dval">'+p.death+'</span></div>':'')+
+    (p.bio?'<div class="divider"></div><p class="dbio">'+esc(p.bio)+'</p>':'')+
+    '<div class="divider"></div>'+
+    '<div class="hint-box">💡 <strong>Vincular:</strong> arrastrá desde un punto ● del borde hasta otra tarjeta.<br><strong>Mover canvas:</strong> botón del medio del mouse.</div>'+
+    '<div style="font-weight:700;font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Vínculos ('+conns.length+')</div>'+
+    '<ul class="clist">'+
+    conns.map(function(item){
+      var c=item.c,o=item.o,lbl=item.lbl;
+      return '<li><div style="display:flex;align-items:center;gap:7px">'+
+        '<div class="mav '+gc(o.gender)+'">'+(o.photo?'<img src="'+o.photo+'" alt="">':cardInitials(o))+'</div>'+
+        '<div><div style="font-weight:700;font-size:12px">'+esc(fullName(o))+'</div>'+
+        '<div style="font-size:10px;color:var(--text2)">'+lbl+'</div></div></div>'+
+        '<button class="rx" onclick="removeConn(\''+c.from+'\',\''+c.to+'\',\''+id+'\')">✕</button></li>';
+    }).join('')+
+    '</ul>'+
+    '<div class="divider"></div>'+
+    '<button class="btn btn-gold btn-full" onclick="openEditPanel(\''+id+'\')">✏️ Editar persona</button>'+
+    '<button class="btn btn-red btn-full" onclick="askDelete(\''+id+'\')">🗑 Eliminar persona</button>'+
+    '</div>';
+  showPanel('Perfil',body,true);
+}
+
+/* ══════════════════════════════════════
+   DELETE
+══════════════════════════════════════ */
+function askDelete(id){
+  S.deletingId=id; S.deletingConn=null;
+  document.getElementById('del-title').textContent='Eliminar persona';
+  document.getElementById('del-name').textContent=fullName(S.people[id])||'esta persona';
+  document.getElementById('del-sub').style.display='block';
+  document.getElementById('del-sub').textContent='También se borran todos sus vínculos.';
+  document.getElementById('del-modal').classList.add('open');
+}
+function cancelDel(){document.getElementById('del-modal').classList.remove('open');S.deletingId=null;S.deletingConn=null;S._bulkDeleteIds=null;}
+function confirmDel(){
+  document.getElementById('del-modal').classList.remove('open');
+  if(S._bulkDeleteIds){
+    var bids=S._bulkDeleteIds; S._bulkDeleteIds=null;
+    bids.forEach(function(id){
+      delete S.people[id];
+      S.connections=S.connections.filter(function(c){return c.from!==id&&c.to!==id;});
+      var card=document.querySelector('[data-id="'+id+'"]');
+      if(card)card.remove();
+    });
+    S.selectedIds.clear();S.selectedId=null;
+    renderConns();persist();closePanel();
+    if(!Object.keys(S.people).length)document.getElementById('empty').style.display='block';
+    toast(bids.length+' personas eliminadas');
+    return;
+  }
+  if(S.deletingConn!==null){
+    S.connections.splice(S.deletingConn,1);
+    S.deletingConn=null;
+    renderConns();persist();toast('Vínculo eliminado');
+    return;
+  }
+  var id=S.deletingId;if(!id)return;
+  delete S.people[id];
+  S.connections=S.connections.filter(function(c){return c.from!==id&&c.to!==id;});
+  var card=document.querySelector('[data-id="'+id+'"]');
+  if(card)card.remove();
+  renderConns();persist();
+  S.deletingId=null;
+  if(S.selectedId===id){closePanel();S.selectedId=null;}
+  if(!Object.keys(S.people).length)document.getElementById('empty').style.display='block';
+  toast('Persona eliminada');
+}
+
+/* ══════════════════════════════════════
+   REMOVE CONNECTION
+══════════════════════════════════════ */
+function removeConn(from,to,reopen){
+  S.connections=S.connections.filter(function(c){return!(c.from===from&&c.to===to)&&!(c.from===to&&c.to===from);});
+  renderConns();persist();
+  if(reopen)openDetailPanel(reopen);
+  toast('Vínculo eliminado');
+}
+
+/* ══════════════════════════════════════
+   RELATION MODAL
+══════════════════════════════════════ */
+function openRelModal(fromId,toId){
+  S.relFrom=fromId; S.relTo=toId;
+  var a=fullName(S.people[fromId])||'?', b=fullName(S.people[toId])||'?';
+  var dup=S.connections.some(function(c){return(c.from===fromId&&c.to===toId)||(c.from===toId&&c.to===fromId);});
+  if(dup){toast('Ya existe un vínculo entre estas personas');S.relFrom=null;S.relTo=null;return;}
+  var port=S.wiringFromPort||'';
+  var preType='pareja';
+  if(port==='t') preType='hijo';
+  else if(port==='b') preType='padre';
+  document.getElementById('rel-modal-title').textContent='Tipo de vínculo';
+  document.getElementById('rel-modal-sub').textContent=a+' ↔ '+b;
+  document.getElementById('rel-type').innerHTML=
+    '<option value="padre"'+(preType==='padre'?' selected':'')+'>👇 "'+a+'" es Padre/Madre de "'+b+'"</option>'+
+    '<option value="hijo"'+(preType==='hijo'?' selected':'')+'>👆 "'+b+'" es Padre/Madre de "'+a+'"</option>'+
+    '<option value="pareja"'+(preType==='pareja'?' selected':'')+'>↔ Pareja / Cónyuges</option>'+
+    '<option value="hermano">↔ Hermanos/as</option>';
+  document.getElementById('rel-modal').classList.add('open');
+}
+function cancelRel(){document.getElementById('rel-modal').classList.remove('open');S.relFrom=null;S.relTo=null;}
+function confirmRel(){
+  var from=S.relFrom,to=S.relTo,type=document.getElementById('rel-type').value;
+  if(type==='hijo'){var tmp=from;from=to;to=tmp;type='padre';}
+  S.connections.push({from:from,to:to,type:type});
+  renderConns();persist();
+  document.getElementById('rel-modal').classList.remove('open');
+  openDetailPanel(S.relFrom||from);
+  S.relFrom=null;S.relTo=null;S.wiringFromPort=null;
+  toast('Vínculo creado ✓');
+}
+
+
+function showPanel(title,body,noPad=false){
+  const panel=document.getElementById('panel');
+  panel.style.display='flex';
+  panel.innerHTML=`<div class="ph">${title}<button class="phx" onclick="closePanel()">×</button></div><div class="pb" style="${noPad?'padding:0':''}">${body}</div>`;
+}
+
+/* ══════════════════════════════════════
+   FORM
+══════════════════════════════════════ */
+function formHTML(p){
+  p=p||{};
+  const photoHtml=p.photo
+    ?`<div style="text-align:center;margin-bottom:7px"><img src="${p.photo}" id="photo-prev" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid var(--gold)"></div><div class="pu-area" onclick="document.getElementById('photo-file').click()">📷 Cambiar foto</div>`
+    :`<div class="pu-area" onclick="document.getElementById('photo-file').click()">📷 Subir foto (opcional)</div><div id="pp-wrap" style="display:none;text-align:center;margin-top:7px"><img id="photo-prev" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid var(--gold)"></div>`;
+  return `
+    <div class="fg">${photoHtml}</div>
+    <div class="fg"><label>Nombre *</label><input type="text" id="f-firstname" value="${esc(p.firstName||p.name||'')}" placeholder="Ej: Juan"></div>
+    <div class="fg"><label>Segundo nombre</label><input type="text" id="f-middlename" value="${esc(p.middleName||'')}" placeholder="Ej: Carlos (opcional)"></div>
+    <div class="fg"><label>Apellido/s *</label><input type="text" id="f-lastname" value="${esc(p.lastName||'')}" placeholder="Ej: García López"></div>
+    <div class="fg"><label>Género</label><div class="rg">
+      <div class="ro male ${(!p.gender||p.gender==='masculino')?'sel':''}" data-g="masculino">👨 Hombre</div>
+      <div class="ro female ${p.gender==='femenino'?'sel':''}" data-g="femenino">👩 Mujer</div>
+      <div class="ro neutral ${p.gender==='otro'?'sel':''}" data-g="otro">🧑 Otro</div>
+    </div></div>
+    <div class="fg"><label>Rol</label><input type="text" id="f-role" value="${esc(p.role||'')}" placeholder="Abuelo, Tío, Primo..."></div>
+    <div class="fg"><label>Año nacimiento</label><input type="text" id="f-birth" value="${p.birth||''}" placeholder="1945"></div>
+    <div class="fg"><label>Año fallecimiento</label><input type="text" id="f-death" value="${p.death||''}" placeholder="(dejar vacío si vive)"></div>
+    <div class="fg"><label>Lugar de nacimiento</label><input type="text" id="f-birthplace" value="${esc(p.birthplace||'')}" placeholder="Buenos Aires"></div>
+    <div class="fg"><label>Notas / biografía</label><textarea id="f-bio" placeholder="Historia de vida...">${esc(p.bio||'')}</textarea></div>
+    <div style="display:flex;gap:7px;margin-top:4px">
+      <button class="btn btn-gold" style="flex:1" onclick="savePerson()">💾 Guardar</button>
+      <button class="btn btn-ghost" style="color:var(--text2);border-color:#ccc" onclick="closePanel()">Cancelar</button>
+    </div>`;
+}
+function bindRadio(){
+  document.querySelectorAll('.ro[data-g]').forEach(el=>{
+    el.addEventListener('click',function(){
+      document.querySelectorAll('.ro[data-g]').forEach(e=>e.classList.remove('sel'));
+      this.classList.add('sel');
+    });
+  });
+}
+function handlePhoto(e){
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    S.photoData=ev.target.result;
+    const prev=document.getElementById('photo-prev');
+    const wrap=document.getElementById('pp-wrap');
+    if(prev){prev.src=S.photoData;prev.style.display='block';}
+    if(wrap)wrap.style.display='block';
+  };
+  r.readAsDataURL(f);e.target.value='';
+}
+function savePerson(){
+  const firstName=(document.getElementById('f-firstname').value||'').trim();
+  const middleName=(document.getElementById('f-middlename').value||'').trim();
+  const lastName=(document.getElementById('f-lastname').value||'').trim();
+  if(!firstName&&!lastName){toast('El nombre es obligatorio');return;}
+  const gender=(document.querySelector('.ro.sel[data-g]')||{}).dataset?.g||'masculino';
+  const data={
+    firstName,middleName,lastName,
+    name:[firstName,middleName,lastName].filter(Boolean).join(' '), // legacy compat
+    gender,
+    role:(document.getElementById('f-role').value||'').trim(),
+    birth:(document.getElementById('f-birth').value||'').trim(),
+    death:(document.getElementById('f-death').value||'').trim(),
+    birthplace:(document.getElementById('f-birthplace').value||'').trim(),
+    bio:(document.getElementById('f-bio').value||'').trim(),
+    photo:S.photoData||null,
+  };
+  if(S.panelMode==='edit'&&S.editingId){
+    Object.assign(S.people[S.editingId],data);
+    buildCard(S.editingId);renderConns();
+    toast('Persona actualizada ✓');
+  }else{
+    const id=uid();
+    const ids=Object.keys(S.people),cols=Math.max(1,Math.ceil(Math.sqrt(ids.length+1)));
+    data.x=(ids.length%cols)*230+70;data.y=Math.floor(ids.length/cols)*180+70;
+    S.people[id]=data;buildCard(id);
+    document.getElementById('empty').style.display='none';
+    renderConns();toast('Persona agregada ✓');
+  }
+  persist();closePanel();
+}
+
+/* ══════════════════════════════════════
+   EXPORT / IMPORT
+══════════════════════════════════════ */
+function exportData(){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify({people:S.people,connections:S.connections,nextId:S.nextId},null,2)],{type:'application/json'}));
+  a.download='arbol-genealogico.json';a.click();toast('Árbol exportado');
+}
+function handleImport(e){
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{const d=JSON.parse(ev.target.result);S.people=d.people||{};S.connections=d.connections||[];S.nextId=d.nextId||1;persist();renderAll();fitScreen();toast('Árbol importado ✓');}
+    catch{toast('Error al leer el archivo');}
+  };
+  r.readAsText(f);e.target.value='';
+}
+
+/* ══════════════════════════════════════
+   TOAST
+══════════════════════════════════════ */
+function toast(msg){
+  const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2600);
+}
+
+/* ══════════════════════════════════════
+   KEYBOARD
+══════════════════════════════════════ */
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT')return;
+  if(e.key==='Delete'||e.key==='Backspace'){
+    if(S.selectedIds.size>1){
+      // bulk delete multiple selected
+      askDeleteMultiple([...S.selectedIds]);
+    } else if(S.selectedId&&S.people[S.selectedId]){
+      askDelete(S.selectedId);
+    }
+  }
+  if(e.key==='Escape'){
+    cancelDel(); cancelRel(); connActionCancel(); closePanel();
+    // also clear marquee if active
+    if(S.marquee){
+      document.getElementById('marquee').style.display='none';
+      cwEl.classList.remove('marquee-mode');
+      S.marquee=null;
+    }
+    document.querySelectorAll('.card').forEach(c=>c.classList.remove('selected','in-selection'));
+    S.selectedId=null; S.selectedIds.clear();
+  }
+});
+
+function askDeleteMultiple(ids){
+  // store list for bulk delete
+  S._bulkDeleteIds=ids;
+  document.getElementById('del-title').textContent='Eliminar selección';
+  document.getElementById('del-name').textContent=ids.length+' personas seleccionadas';
+  document.getElementById('del-sub').style.display='block';
+  document.getElementById('del-sub').textContent='También se borran todos sus vínculos.';
+  document.getElementById('del-modal').classList.add('open');
+}
+
+/* ══════════════════════════════════════
+   INIT
+══════════════════════════════════════ */
+loadData();renderAll();applyTransform();
+</script>
+</body>
+</html>
