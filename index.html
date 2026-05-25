@@ -2,7 +2,11 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#4A3325">
 <title>Árbol Genealógico</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
 <style>
@@ -21,11 +25,31 @@ body.no-select{user-select:none!important;-webkit-user-select:none!important;}
 body.no-select *{user-select:none!important;-webkit-user-select:none!important;}
 
 /* HEADER */
-header{background:var(--bark2);padding:12px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid var(--gold);flex-shrink:0;z-index:10;}
-.logo{font-family:'Playfair Display',serif;color:var(--cream);font-size:19px;display:flex;align-items:center;gap:8px;}
-.logo span{color:var(--gold);}
-.hbtns{display:flex;gap:7px;}
-.btn{padding:7px 13px;border:none;border-radius:6px;cursor:pointer;font-family:'Lato',sans-serif;font-size:12px;font-weight:700;transition:all .15s;display:inline-flex;align-items:center;gap:5px;}
+header{background:var(--bark2);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid var(--gold);flex-shrink:0;z-index:10;gap:8px;}
+.logo{font-family:'Playfair Display',serif;color:var(--cream);display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.logo-tree{font-size:22px;line-height:1;}
+/* Desktop: single line */
+.logo-text{display:flex;flex-direction:row;align-items:center;gap:0;line-height:1;}
+.logo-top{font-size:19px;font-weight:700;color:var(--gold);font-family:'Playfair Display',serif;}
+.logo-bottom{font-size:19px;font-weight:400;color:var(--cream);font-family:'Playfair Display',serif;}
+.logo-gold{color:var(--gold);}
+.hbtns{display:flex;gap:7px;align-items:center;}
+.btn-icon-only{display:none;}
+.lang-btn{
+  display:flex;align-items:center;gap:5px;
+  background:rgba(255,255,255,0.08);
+  border:1.5px solid rgba(255,255,255,0.25);
+  color:var(--cream);border-radius:8px;
+  padding:6px 10px;font-size:13px;font-weight:700;
+  font-family:'Lato',sans-serif;cursor:pointer;
+  transition:background .15s,border-color .15s;
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+  white-space:nowrap;
+}
+.lang-btn:hover{background:rgba(255,255,255,0.15);border-color:rgba(255,255,255,0.4);}
+#lang-flag{font-size:15px;line-height:1;}
+#lang-code{font-size:12px;letter-spacing:.5px;}
+.btn{padding:7px 13px;border:none;border-radius:6px;cursor:pointer;font-family:'Lato',sans-serif;font-size:12px;font-weight:700;transition:all .15s;display:inline-flex;align-items:center;gap:5px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
 .btn-gold{background:var(--gold);color:var(--bark2);}
 .btn-gold:hover{background:var(--gold2);}
 .btn-ghost{background:transparent;color:var(--cream);border:1.5px solid rgba(255,255,255,.3);}
@@ -45,7 +69,7 @@ header{background:var(--bark2);padding:12px 18px;display:flex;align-items:center
 /* drag-wire SVG — in screen space (above everything) */
 #wire-svg{position:absolute;inset:0;pointer-events:none;overflow:visible;width:100%;height:100%;z-index:15;}
 /* scaled canvas — conn-svg lives INSIDE this so it scales with cards, no smear */
-#canvas{position:absolute;top:0;left:0;transform-origin:0 0;overflow:visible;}
+#canvas{position:absolute;top:0;left:0;transform-origin:0 0;overflow:visible;will-change:transform;-webkit-transform-style:preserve-3d;}
 /* conn-svg inside canvas: positioned at 0,0, huge viewport, scales with canvas */
 #conn-svg{position:absolute;top:0;left:0;width:8000px;height:8000px;pointer-events:none;overflow:visible;}
 
@@ -81,7 +105,7 @@ header{background:var(--bark2);padding:12px 18px;display:flex;align-items:center
 .card-years{font-size:10px;color:var(--text2);margin-bottom:2px;}
 .card-role{font-size:10px;color:var(--leaf);font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
 .card-btns{display:flex;gap:3px;padding:0 6px 7px;}
-.cta{flex:1;padding:4px 2px;border:1px solid #e0d8cc;background:var(--cream);border-radius:5px;cursor:pointer;font-size:11px;color:var(--text2);transition:all .12s;}
+.cta{flex:1;padding:4px 2px;border:1px solid #e0d8cc;background:var(--cream);border-radius:5px;cursor:pointer;font-size:11px;color:var(--text2);transition:all .12s;touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
 .cta:hover{background:var(--cream2);color:var(--bark);}
 
 /* NODE PORTS — visible dots on edges of each card for dragging connections */
@@ -120,12 +144,12 @@ header{background:var(--bark2);padding:12px 18px;display:flex;align-items:center
 
 /* TOOLBAR */
 .toolbar{position:absolute;top:12px;left:12px;display:flex;gap:6px;z-index:5;}
-.tbtn{padding:6px 12px;background:#fff;border:1px solid #ddd;border-radius:7px;cursor:pointer;font-size:12px;font-family:'Lato',sans-serif;font-weight:700;color:var(--text2);box-shadow:0 2px 7px var(--shadow);transition:all .12s;}
+.tbtn{padding:6px 12px;background:#fff;border:1px solid #ddd;border-radius:7px;cursor:pointer;font-size:12px;font-family:'Lato',sans-serif;font-weight:700;color:var(--text2);box-shadow:0 2px 7px var(--shadow);transition:all .12s;touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
 .tbtn:hover{background:var(--cream);color:var(--bark);}
 
 /* ZOOM */
 .zbts{position:absolute;bottom:18px;right:18px;display:flex;flex-direction:column;gap:4px;}
-.zbt{width:32px;height:32px;background:#fff;border:1px solid #ddd;border-radius:7px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 7px var(--shadow);transition:all .12s;color:var(--text);}
+.zbt{width:32px;height:32px;background:#fff;border:1px solid #ddd;border-radius:7px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 7px var(--shadow);transition:all .12s;color:var(--text);touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
 .zbt:hover{background:var(--cream);}
 
 /* EMPTY */
@@ -196,16 +220,150 @@ body.wiring .port{background:var(--gold);border-color:var(--gold2);}
 #cw.marquee-mode{cursor:crosshair;}
 
 /* selection handled by .sel-ring child div */
+
+/* COLLAPSED CARD */
+.card.collapsed .card-body,
+.card.collapsed .card-btns{ display:none; }
+.card.collapsed .card-head{ border-radius:10px; }
+.collapse-btn{
+  position:absolute;top:4px;right:4px;
+  width:16px;height:16px;border-radius:50%;
+  background:rgba(255,255,255,0.25);border:none;
+  color:#fff;font-size:10px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  line-height:1;padding:0;z-index:6;
+  transition:background .15s;
+}
+.collapse-btn:hover{background:rgba(255,255,255,0.45);}
+
+/* ═══════════ MOBILE ═══════════ */
+@media (max-width: 700px){
+
+  /* ── Header ── */
+  header{padding:10px 12px;gap:6px;}
+  .logo-tree{font-size:20px;}
+  /* Mobile: two lines */
+  .logo-text{flex-direction:column;align-items:flex-start;gap:0;line-height:1.1;}
+  .logo-top{font-size:10px;font-family:'Lato',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:1px;opacity:.8;}
+  .logo-bottom{font-size:16px;}
+  .hbtns{gap:5px;}
+  .btn-ghost .btn-label{display:none;}
+  .btn-ghost{padding:10px 11px;font-size:17px;border-radius:8px;}
+  /* Gold button: show only + on mobile */
+  .btn-gold .btn-label{display:none;}
+  .btn-gold .btn-icon-only{display:inline;}
+  .btn-gold{padding:10px 16px;font-size:20px;font-weight:900;border-radius:8px;line-height:1;}
+  .lang-btn{padding:8px 10px;}
+
+  /* ── Canvas toolbar ── */
+  .toolbar{top:10px;left:10px;gap:6px;}
+  .tbtn{padding:10px 14px;font-size:13px;border-radius:9px;box-shadow:0 2px 10px var(--shadow);}
+
+  /* ── Zoom buttons: big, right side ── */
+  .zbts{bottom:20px;right:14px;gap:6px;}
+  .zbt{width:48px;height:48px;font-size:24px;border-radius:10px;box-shadow:0 2px 10px var(--shadow);}
+
+  /* ── Legend: hidden ── */
+  .legend{display:none;}
+  #marquee{display:none!important;}
+
+  /* ── Cards: readable on small screen ── */
+  .card{width:170px;}
+  .card-head{padding:12px 11px 9px;gap:9px;}
+  .avatar{width:42px;height:42px;}
+  .av-txt{font-size:13px;}
+  .card-name{font-size:14px;line-height:1.35;}
+  .card-body{padding:7px 11px 5px;}
+  .card-years{font-size:11px;}
+  .card-role{font-size:11px;}
+  /* Card action buttons: tall touch targets */
+  .card-btns{gap:5px;padding:0 8px 10px;}
+  .cta{padding:10px 4px;font-size:15px;border-radius:7px;}
+
+  /* ── Ports: big enough for fingers ── */
+  .port{width:20px;height:20px;}
+  .port-t{top:-10px;} .port-b{bottom:-10px;}
+  .port-l{left:-10px;} .port-r{right:-10px;}
+  /* No tooltips on touch */
+  .port::after{display:none;}
+
+  /* ── Side panel: full screen ── */
+  #panel{
+    position:fixed;inset:0;width:100%!important;
+    z-index:150;border-left:none;
+  }
+  /* Panel header: bigger close button */
+  .ph{padding:18px 20px;font-size:17px;}
+  .phx{font-size:32px;padding:0 6px;opacity:0.9;min-width:44px;text-align:center;}
+
+  /* Panel body scroll */
+  .pb{padding:18px;padding-bottom:50px;}
+
+  /* Form fields */
+  label{font-size:13px;margin-bottom:6px;}
+  input[type=text],select,textarea{
+    font-size:16px;padding:12px 14px;border-radius:9px;
+  }
+  textarea{min-height:80px;}
+  .fg{margin-bottom:16px;}
+
+  /* Gender radio */
+  .rg{gap:8px;}
+  .ro{padding:10px 6px;font-size:13px;border-radius:9px;}
+
+  /* Detail panel */
+  .dav-area{padding:24px;}
+  .dav{width:80px;height:80px;font-size:28px;}
+  .dname{font-size:20px;}
+  .dsub{font-size:13px;}
+  .dbody{padding:18px;}
+  .drow{font-size:14px;margin-bottom:12px;}
+  .dbio{font-size:14px;}
+
+  /* Connection list */
+  .clist li{padding:10px 12px;font-size:14px;border-radius:9px;margin-bottom:6px;}
+  .clist li .rx{font-size:20px;padding:0 6px;}
+  .mav{width:36px;height:36px;font-size:13px;}
+
+  /* Hint box */
+  .hint-box{font-size:13px;padding:12px 14px;}
+
+  /* Buttons in panel */
+  .btn-full{padding:14px;font-size:15px;border-radius:9px;margin-bottom:10px;}
+
+  /* Modals */
+  .overlay{align-items:flex-end;}
+  .modal{
+    width:100%;max-width:100%;
+    border-radius:20px 20px 0 0;
+    padding:24px 20px 36px;
+  }
+  .modal h3{font-size:19px;margin-bottom:16px;}
+  .modal-foot{gap:10px;margin-top:20px;}
+  .modal-foot .btn{padding:13px 20px;font-size:15px;flex:1;justify-content:center;}
+
+  /* Toast */
+  #toast{font-size:15px;padding:12px 20px;bottom:30px;}
+}
 </style>
 </head>
 <body>
 
 <header>
-  <div class="logo">🌳 <span>Árbol</span>Genealógico</div>
+  <div class="logo">
+    <span class="logo-tree">🌳</span>
+    <div class="logo-text">
+      <span class="logo-top">Árbol</span>
+      <span class="logo-bottom"> Genealógico</span>
+    </div>
+  </div>
   <div class="hbtns">
-    <button class="btn btn-ghost" onclick="exportData()">⬇ Exportar</button>
-    <button class="btn btn-ghost" onclick="document.getElementById('imp-file').click()">⬆ Importar</button>
-    <button class="btn btn-gold" onclick="openAddPanel()">+ Agregar persona</button>
+    <button class="lang-btn" id="lang-btn" onclick="toggleLang()" ontouchstart="toggleLang();event.preventDefault()" title="Idioma / Language">
+      <span id="lang-flag">🇦🇷</span><span id="lang-code">ES</span>
+    </button>
+    <button class="btn btn-ghost" onclick="exportData()" ontouchstart="exportData();event.preventDefault()">⬇<span class="btn-label"> Exportar</span></button>
+    <button class="btn btn-ghost" onclick="document.getElementById('imp-file').click()" ontouchstart="document.getElementById('imp-file').click();event.preventDefault()">⬆<span class="btn-label"> Importar</span></button>
+    <button class="btn btn-gold" onclick="openAddPanel()" ontouchstart="openAddPanel();event.preventDefault()"><span class="btn-label">+ Agregar</span><span class="btn-icon-only">+</span></button>
   </div>
 </header>
 
@@ -219,8 +377,9 @@ body.wiring .port{background:var(--gold);border-color:var(--gold2);}
     </div>
 
     <div class="toolbar">
-      <button class="tbtn" onclick="autoLayout()">🔀 Organizar</button>
-      <button class="tbtn" onclick="fitScreen()">⊞ Ajustar</button>
+      <button class="tbtn" data-action="organize" onclick="autoLayout()" ontouchstart="autoLayout();event.preventDefault()">🔀 Organizar</button>
+      <button class="tbtn" data-action="fit" onclick="fitScreen()" ontouchstart="fitScreen();event.preventDefault()">⊞ Ajustar</button>
+      <button class="tbtn" id="btn-collapse-all" onclick="toggleCollapseAll()" ontouchstart="toggleCollapseAll();event.preventDefault()">▼ Contraer</button>
     </div>
 
     <div class="legend">
@@ -237,15 +396,15 @@ body.wiring .port{background:var(--gold);border-color:var(--gold2);}
     </div>
 
     <div class="zbts">
-      <button class="zbt" onclick="doZoom(.15)">+</button>
-      <button class="zbt" onclick="doZoom(-.15)">−</button>
-      <button class="zbt" onclick="resetView()" style="font-size:12px">↺</button>
+      <button class="zbt" onclick="doZoom(.15)" ontouchstart="doZoom(.15);event.preventDefault()">+</button>
+      <button class="zbt" onclick="doZoom(-.15)" ontouchstart="doZoom(-.15);event.preventDefault()">−</button>
+      <button class="zbt" onclick="resetView()" ontouchstart="resetView();event.preventDefault()" style="font-size:12px">↺</button>
     </div>
 
     <div id="empty">
       <div class="ei">🌳</div>
       <h2>Tu árbol está vacío</h2>
-      <p>Hacé clic en <strong>+ Agregar persona</strong> para empezar</p>
+      <p>Doble clic en el canvas para empezar</p>
     </div>
     <div id="marquee"></div>
   </div>
@@ -265,6 +424,7 @@ body.wiring .port{background:var(--gold);border-color:var(--gold2);}
         <option value="hermano">👫 Hermano/a</option>
       </select>
     </div>
+    <div id="cam-reorder-wrap" style="display:none"></div>
     <div class="modal-foot">
       <button class="btn btn-red" style="margin-right:auto" onclick="connActionDelete()">🗑 Eliminar</button>
       <button class="btn btn-ghost" style="color:var(--text2);border-color:#ccc" onclick="connActionCancel()">Cancelar</button>
@@ -336,15 +496,16 @@ const S = {
   selectedIds:new Set(),  // multi-selected card ids
   // connection action
   actionConnIdx:null,
-  _bulkDeleteIds:null,
+  _bulkDeleteIds:null, _reorderPersonId:null,
   _justMarqueed:false,
+  collapsed:{},  // id → true if collapsed
 };
 
 /* ══════════════════════════════════════
    PERSIST
 ══════════════════════════════════════ */
-function persist(){try{localStorage.setItem('gt3',JSON.stringify({people:S.people,connections:S.connections,nextId:S.nextId}));}catch(e){}}
-function loadData(){try{const d=JSON.parse(localStorage.getItem('gt3')||'null');if(d){S.people=d.people||{};S.connections=d.connections||[];S.nextId=d.nextId||1;}}catch(e){}}
+function persist(){try{localStorage.setItem('gt3',JSON.stringify({people:S.people,connections:S.connections,nextId:S.nextId,collapsed:S.collapsed}));}catch(e){}}
+function loadData(){try{const d=JSON.parse(localStorage.getItem('gt3')||'null');if(d){S.people=d.people||{};S.connections=d.connections||[];S.nextId=d.nextId||1;S.collapsed=d.collapsed||{};}}catch(e){}}
 
 /* ══════════════════════════════════════
    UTILS
@@ -365,6 +526,22 @@ const cardInitials=p=>{
 const REL_COLOR ={pareja:'#C4972A', padre:'#4A7C59', hermano:'#3A6186'};
 const REL_DASH  ={pareja:'7 4',     padre:'none',    hermano:'5 4'};
 const REL_MARKER={pareja:'dot-y',   padre:'arr-g',   hermano:'dot-b'};
+// Returns "Pareja", "Pareja 1", "Pareja 2", etc depending on how many couples a person has
+function coupleLabel(personId){
+  var coupleConns=S.connections.filter(function(c){
+    return c.type==='pareja'&&(c.from===personId||c.to===personId);
+  });
+  return coupleConns.length>1 ? null : t('relPareja'); // null = needs numbering
+}
+function coupleLabelIndexed(personId, connObj){
+  var coupleConns=S.connections.filter(function(c){
+    return c.type==='pareja'&&(c.from===personId||c.to===personId);
+  });
+  if(coupleConns.length<=1) return t('relPareja');
+  var idx=coupleConns.indexOf(connObj);
+  if(idx<0) idx=coupleConns.findIndex(function(c){return c===connObj;});
+  return t('relPareja')+' '+(idx+1);
+}
 
 function relLabel(type,fromId,toId){
   const a=fullName(S.people[fromId])||'?', b=fullName(S.people[toId])||'?';
@@ -407,9 +584,11 @@ function buildCard(id){
   const av=p.photo?`<img src="${p.photo}" alt="">`:(`<span class="av-txt">${cardInitials(p)}</span>`);
   const years=[p.birth,p.death].filter(Boolean).join(' – ');
   card.style.left=(p.x||0)+'px'; card.style.top=(p.y||0)+'px';
-  card.classList.toggle('selected',S.selectedId===id||S.selectedIds.has(id));
+  var isCollapsed=S.collapsed[id]?'collapsed':'';
+  card.className='card'+( S.selectedId===id||S.selectedIds.has(id)?' selected':'')+' '+isCollapsed;
   card.innerHTML=`
     <div class="sel-ring"></div>
+    <button class="collapse-btn" onclick="toggleCollapse('${id}');event.stopPropagation()" title="Colapsar/expandir">${S.collapsed[id]?'▶':'▼'}</button>
     <div class="ports">
       <div class="port port-t" data-port="t" data-id="${id}"></div>
       <div class="port port-b" data-port="b" data-id="${id}"></div>
@@ -418,7 +597,10 @@ function buildCard(id){
     </div>
     <div class="card-head ${g}" data-drag="${id}">
       <div class="avatar">${av}</div>
-      <div class="card-name">${esc(fullName(p))}</div>
+      <div>
+        <div class="card-name">${esc(fullName(p))}</div>
+        ${S.collapsed[id]&&(p.birth||p.death)?`<div style="font-size:10px;color:rgba(255,255,255,0.7);margin-top:2px">${[p.birth,p.death].filter(Boolean).join('–')}</div>`:''}
+      </div>
     </div>
     <div class="card-body">
       ${years?`<div class="card-years">${years}</div>`:''}
@@ -433,6 +615,18 @@ function buildCard(id){
   card.querySelectorAll('.port').forEach(attachPort);
 }
 
+function toggleCollapse(id){
+  S.collapsed[id]=!S.collapsed[id];
+  persist(); buildCard(id); renderConns();
+}
+function toggleCollapseAll(){
+  var ids=Object.keys(S.people);
+  var anyExpanded=ids.some(function(id){return !S.collapsed[id];});
+  ids.forEach(function(id){ S.collapsed[id]=anyExpanded; });
+  var btn=document.getElementById('btn-collapse-all');
+  if(btn) btn.textContent=anyExpanded?'▶ Expandir':'▼ Contraer';
+  persist(); renderAll(); renderConns();
+}
 function attachCard(card){
   card.addEventListener('mousedown',onCardMD);
   card.addEventListener('click',onCardClick);
@@ -555,13 +749,15 @@ function drawWire(){
 function portCanvasPos(id, port){
   const p=S.people[id]; if(!p)return{x:0,y:0};
   const card=document.querySelector('[data-id="'+id+'"]');
-  const ch=card ? card.offsetHeight : 115;
+  // Use actual height; collapsed cards are much shorter
+  const ch=card ? card.offsetHeight : (S.collapsed[id] ? 52 : 115);
+  const cw=card ? card.offsetWidth  : 175;
   const cx=p.x||0, cy=p.y||0;
-  if(port==='t') return{x:cx+87.5, y:cy};
-  if(port==='b') return{x:cx+87.5, y:cy+ch};
+  if(port==='t') return{x:cx+cw/2, y:cy};
+  if(port==='b') return{x:cx+cw/2, y:cy+ch};
   if(port==='l') return{x:cx,       y:cy+ch/2};
-  if(port==='r') return{x:cx+175,   y:cy+ch/2};
-  return{x:cx+87.5, y:cy+ch/2};
+  if(port==='r') return{x:cx+cw,    y:cy+ch/2};
+  return{x:cx+cw/2, y:cy+ch/2};
 }
 
 function renderConns(){
@@ -621,16 +817,30 @@ function renderConns(){
     const busX1 = Math.min(...allX);
     const busX2 = Math.max(...allX);
 
+    // Detect if any parent is from a secondary couple connection
+    const hasSecParent=validParents.some(pid=>{
+      const pidCoupleConns=S.connections.filter(c=>c.type==='pareja'&&(c.from===pid||c.to===pid));
+      // Check if pid appears as a non-first couple partner of anyone
+      return S.connections.some(c=>{
+        if(c.type!=='pareja') return false;
+        const otherSide=c.from===pid?c.to:c.from;
+        const theirCouples=S.connections.filter(x=>x.type==='pareja'&&(x.from===otherSide||x.to===otherSide));
+        return theirCouples.indexOf(c)>0;
+      });
+    });
+
     // Draw: each parent → vertical line down to bus
     validParents.forEach((id, i)=>{
       const pt = parentPts[i];
       const line = mkLine(pt.x, pt.y, pt.x, busY, col_padre, 2);
+      if(hasSecParent) line.setAttribute('stroke-dasharray','5 4');
       svg.appendChild(line);
     });
 
     // Draw horizontal bus bar
     if(busX1 < busX2){
       const bus = mkLine(busX1, busY, busX2, busY, col_padre, 2);
+      if(hasSecParent) bus.setAttribute('stroke-dasharray','5 4');
       svg.appendChild(bus);
     }
 
@@ -638,6 +848,7 @@ function renderConns(){
     validChildren.forEach((id, i)=>{
       const pt = childPts[i];
       const line = mkLine(pt.x, busY, pt.x, pt.y, col_padre, 2);
+      if(hasSecParent) line.setAttribute('stroke-dasharray','5 4');
       svg.appendChild(line);
 
     });
@@ -710,8 +921,19 @@ function renderConns(){
 
 
     // label
-    svg.appendChild(mkLabel((fp.x+tp.x)/2,(fp.y+tp.y)/2-7,
-      conn.type==='pareja'?'Pareja':'Hermano/a', col));
+    var latLabel;
+    var isSecCouple=false;
+    if(conn.type==='pareja'){
+      var coupleConnsA=S.connections.filter(function(c){return c.type==='pareja'&&(c.from===conn.from||c.to===conn.from);});
+      if(coupleConnsA.length>1){
+        var ci=coupleConnsA.indexOf(conn);
+        latLabel = ci===0 ? t('relPareja') : t('relPareja')+' '+(ci+1);
+        if(ci>0) isSecCouple=true;
+      } else { latLabel=t('relPareja'); }
+    } else { latLabel=t('relHermano'); }
+    // secondary couples use a different dash pattern
+    if(isSecCouple) path.setAttribute('stroke-dasharray','3 5');
+    svg.appendChild(mkLabel((fp.x+tp.x)/2,(fp.y+tp.y)/2-7, latLabel, col));
   });
 }
 
@@ -745,11 +967,37 @@ function onConnClick(e){
   if(!conn)return;
   S.actionConnIdx=i;
   const a=fullName(S.people[conn.from])||'?', b=fullName(S.people[conn.to])||'?';
-  document.getElementById('cam-title').textContent='Vínculo familiar';
+  document.getElementById('cam-title').textContent=t('modifyLink');
   document.getElementById('cam-sub').textContent=a+' ↔ '+b;
-  // set select to current type
   const sel=document.getElementById('cam-type');
-  sel.value=conn.type==='hijo'?'padre':conn.type; // canonical
+  sel.value=conn.type==='hijo'?'padre':conn.type;
+
+  // If this is a pareja and person has multiple couples → show reorder dropdown
+  const reorderWrap=document.getElementById('cam-reorder-wrap');
+  if(conn.type==='pareja'){
+    // Find which person has multiple couples (either from or to)
+    var personIdA=conn.from, personIdB=conn.to;
+    var pConnsA=S.connections.filter(function(c){return c.type==='pareja'&&(c.from===personIdA||c.to===personIdA);});
+    var pConnsB=S.connections.filter(function(c){return c.type==='pareja'&&(c.from===personIdB||c.to===personIdB);});
+    // Use the person with more couples, or either if equal >1
+    var personId=personIdA, pConns=pConnsA;
+    if(pConnsB.length>pConnsA.length){ personId=personIdB; pConns=pConnsB; }
+    S._reorderPersonId=personId;
+    if(pConns.length>1){
+      const currentIdx=pConns.indexOf(conn);
+      var opts='';
+      for(var pi=0;pi<pConns.length;pi++){
+        var lbl2 = pi===0 ? t('relPareja') : t('relPareja')+' '+(pi+1);
+        opts+='<option value="'+pi+'"'+(pi===currentIdx?' selected':'')+'>'+lbl2+'</option>';
+      }
+      reorderWrap.innerHTML='<div class="fg" style="margin-top:12px"><label>'+t('coupleOrder')+'</label><select id="cam-couple-order">'+opts+'</select></div>';
+      reorderWrap.style.display='block';
+    } else {
+      reorderWrap.innerHTML=''; reorderWrap.style.display='none'; S._reorderPersonId=null;
+    }
+  } else {
+    reorderWrap.innerHTML=''; reorderWrap.style.display='none'; S._reorderPersonId=null;
+  }
   document.getElementById('conn-action-modal').classList.add('open');
 }
 function connActionCancel(){
@@ -758,10 +1006,33 @@ function connActionCancel(){
 }
 function connActionSave(){
   const i=S.actionConnIdx; if(i===null)return;
-  S.connections[i].type=document.getElementById('cam-type').value;
+  const conn=S.connections[i];
+  const newType=document.getElementById('cam-type').value;
+  conn.type=newType;
+  // Handle couple reorder if requested
+  if(newType==='pareja'){
+    const orderSel=document.getElementById('cam-couple-order');
+    if(orderSel){
+      const newIdx=parseInt(orderSel.value);
+      const personId=S._reorderPersonId||conn.from;
+      const pConns=S.connections.filter(function(c){return c.type==='pareja'&&(c.from===personId||c.to===personId);});
+      const oldIdx=pConns.indexOf(conn);
+      if(oldIdx!==-1 && newIdx!==oldIdx){
+        // Move conn to position newIdx in S.connections (relative to other pareja conns of this person)
+        // Remove conn from its current position
+        var globalOld=S.connections.indexOf(conn);
+        S.connections.splice(globalOld,1);
+        // Find new insertion point: after the (newIdx-1)th pareja conn of this person
+        var pConnsNew=S.connections.filter(function(c){return c.type==='pareja'&&(c.from===personId||c.to===personId);});
+        var insertAfter=newIdx===0 ? -1 : S.connections.indexOf(pConnsNew[newIdx-1]);
+        S.connections.splice(insertAfter+1,0,conn);
+      }
+      S._reorderPersonId=null;
+    }
+  }
   renderConns();persist();
   connActionCancel();
-  toast('Vínculo actualizado ✓');
+  toast(t('linkCreated'));
 }
 function connActionDelete(){
   const i=S.actionConnIdx; if(i===null)return;
@@ -906,7 +1177,8 @@ window.addEventListener('mouseup',e=>{
 
 cwEl.addEventListener('auxclick',e=>{e.preventDefault();});
 cwEl.addEventListener('dblclick',e=>{
-  if(e.target.closest('.card')||e.target.closest('.port'))return;
+  // Only add person when double-clicking on truly empty canvas (not buttons, cards, ports, toolbar)
+  if(e.target.closest('.card')||e.target.closest('.port')||e.target.closest('.tbtn')||e.target.closest('.zbt')||e.target.closest('.zbts')||e.target.closest('.toolbar'))return;
   openAddPanel();
 });
 cwEl.addEventListener('click',e=>{
@@ -941,7 +1213,7 @@ function findCardUnderMouse(mx,my){
    TRANSFORM
 ══════════════════════════════════════ */
 function applyTransform(){
-  document.getElementById('canvas').style.transform=`translate(${S.panX}px,${S.panY}px) scale(${S.zoom})`;
+  document.getElementById('canvas').style.transform=`translate3d(${S.panX}px,${S.panY}px,0) scale(${S.zoom})`;
   // conn-svg is inside canvas, scales automatically — no renderConns needed on pan/zoom
 }
 function doZoom(d){
@@ -951,254 +1223,448 @@ function doZoom(d){
   S.panY=r.height/2-(r.height/2-S.panY)*(nz/S.zoom);
   S.zoom=nz;applyTransform();
 }
-function resetView(){S.zoom=1;S.panX=60;S.panY=60;applyTransform();}
+function resetView(){fitScreen();}
 function fitScreen(){
   const ids=Object.keys(S.people);if(!ids.length)return;
   let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
   for(const id of ids){const p=S.people[id];mnx=Math.min(mnx,p.x||0);mny=Math.min(mny,p.y||0);mxx=Math.max(mxx,(p.x||0)+175);mxy=Math.max(mxy,(p.y||0)+120);}
-  const r=cwEl.getBoundingClientRect(),pad=60;
+  const r=cwEl.getBoundingClientRect(),pad=100;
   const sx=(r.width-2*pad)/(mxx-mnx||1),sy=(r.height-2*pad)/(mxy-mny||1);
-  S.zoom=Math.max(.2,Math.min(2,Math.min(sx,sy)));
+  S.zoom=Math.max(.2,Math.min(1.5,Math.min(sx,sy)));
   S.panX=pad-mnx*S.zoom;S.panY=pad-mny*S.zoom;applyTransform();
 }
 function autoLayout(){
   var ids = Object.keys(S.people);
   if(!ids.length) return;
 
-  var CW=210, CH=170, PAD=60;
+  var CW      = 220;   // card width
+  var GAP_X   = 30;    // min horizontal gap
+  var GAP_Y   = 70;    // vertical gap between generations
+  var PAD     = 80;
+  var H_EXP   = 120;   // expanded card height
+  var H_COL   = 52;    // collapsed card height
+  var STAG_X  = CW + GAP_X;  // diagonal x-step per secondary couple
+  var STAG_Y  = 70;           // diagonal y-step per secondary couple
 
-  // Build maps
-  var coupleOf={}, childrenOf={}, parentsOf={};
-  ids.forEach(function(id){ childrenOf[id]=[]; parentsOf[id]=[]; });
+  function cardH(id){ return S.collapsed[id] ? H_COL : H_EXP; }
+
+  // ── Maps ─────────────────────────────────────────────────
+  var couplesOf={}, childrenOf={}, parentsOf={};
+  ids.forEach(function(id){ childrenOf[id]=[]; parentsOf[id]=[]; couplesOf[id]=[]; });
   S.connections.forEach(function(c){
     if(c.type==='pareja'){
-      coupleOf[c.from]=c.to; coupleOf[c.to]=c.from;
+      if(!couplesOf[c.from].includes(c.to)) couplesOf[c.from].push(c.to);
+      if(!couplesOf[c.to].includes(c.from)) couplesOf[c.to].push(c.from);
     } else if(c.type==='padre'){
       if(!childrenOf[c.from].includes(c.to)) childrenOf[c.from].push(c.to);
       if(!parentsOf[c.to].includes(c.from))  parentsOf[c.to].push(c.from);
     }
   });
 
-  // Step 1: assign generation
-  // A child's generation = max(parent generations) + 1
-  // Partners share the same generation
-  // Use iterative relaxation until stable
+  function primaryCouple(id){ return couplesOf[id][0]; }
+  function sibKey(id){ return parentsOf[id].slice().sort().join('|'); }
+
+  // ── Step 1: generations ───────────────────────────────────
   var gen={};
   ids.forEach(function(id){ gen[id]=0; });
-
-  var changed=true;
-  var iterations=0;
-  while(changed && iterations<50){
-    changed=false; iterations++;
+  var changed=true, itr=0;
+  while(changed && itr<60){
+    changed=false; itr++;
     ids.forEach(function(id){
-      // children must be strictly below ALL parents
       parentsOf[id].forEach(function(pid){
-        if(gen[id] <= gen[pid]){
-          gen[id] = gen[pid]+1;
-          changed=true;
-        }
+        if(gen[id]<=gen[pid]){ gen[id]=gen[pid]+1; changed=true; }
       });
     });
-    // partners must be on the same row — use max of the two
     ids.forEach(function(id){
-      var p=coupleOf[id];
-      if(p===undefined) return;
-      var maxG=Math.max(gen[id], gen[p]);
-      if(gen[id]!==maxG){ gen[id]=maxG; changed=true; }
-      if(gen[p]!==maxG){ gen[p]=maxG; changed=true; }
+      couplesOf[id].forEach(function(pid){
+        var mx=Math.max(gen[id],gen[pid]);
+        if(gen[id]!==mx){ gen[id]=mx; changed=true; }
+        if(gen[pid]!==mx){ gen[pid]=mx; changed=true; }
+      });
     });
   }
 
-  // Step 2: build ordered flat array per generation
+  // ── Step 2: secondary couples ─────────────────────────────
+  var isSecondary={};
+  ids.forEach(function(id){
+    couplesOf[id].forEach(function(pid, ci){
+      if(ci===0) return;
+      if(!isSecondary[pid]) isSecondary[pid]={ofId:id, idx:ci};
+    });
+  });
+
+  // ── Step 3: group by generation ──────────────────────────
   var byGen={};
   ids.forEach(function(id){
+    if(isSecondary[id]) return;
     var g=gen[id];
     if(!byGen[g]) byGen[g]=[];
     byGen[g].push(id);
   });
   var gens=Object.keys(byGen).map(Number).sort(function(a,b){return a-b;});
 
+  // ── Step 4: flat order per generation ────────────────────
+  // Key rule: siblings that have couples need DOUBLE GAP between them
+  // First sibling: partner LEFT. Others: partner RIGHT.
+  // Children ordered by connection order (first child added = leftmost).
+
   var flatGen={};
+  var sibHasCoupleInRow={}; // sibKey → bool, any sibling has couple in same row
+
   gens.forEach(function(g){
     var members=byGen[g];
     var placed=new Set();
     var result=[];
 
-    var placeNode=function(id){
+    // Pre-check: which sibling groups have members with couples in same row
+    var pkMap={};
+    members.forEach(function(id){
+      if(!parentsOf[id].length) return;
+      var k=sibKey(id);
+      if(!pkMap[k]) pkMap[k]=[];
+      pkMap[k].push(id);
+    });
+
+    function placeLeft(id){
+      if(placed.has(id)) return;
+      var pc=primaryCouple(id);
+      var ok=pc&&members.includes(pc)&&!placed.has(pc)&&!isSecondary[pc];
+      if(ok){ placed.add(pc); result.push(pc); }
+      placed.add(id); result.push(id);
+    }
+    function placeRight(id){
       if(placed.has(id)) return;
       placed.add(id); result.push(id);
-      var p=coupleOf[id];
-      if(p && members.includes(p) && !placed.has(p)){
-        placed.add(p); result.push(p);
+      var pc=primaryCouple(id);
+      var ok=pc&&members.includes(pc)&&!placed.has(pc)&&!isSecondary[pc];
+      if(ok){ placed.add(pc); result.push(pc); }
+    }
+    function placeGender(id){
+      if(placed.has(id)) return;
+      var pc=primaryCouple(id);
+      var ok=pc&&members.includes(pc)&&!placed.has(pc)&&!isSecondary[pc];
+      if(!ok){ placed.add(id); result.push(id); return; }
+      var myG=S.people[id]&&S.people[id].gender;
+      var pcG=S.people[pc]&&S.people[pc].gender;
+      if(myG==='masculino'||pcG==='femenino'){
+        placed.add(id); result.push(id); placed.add(pc); result.push(pc);
+      } else {
+        placed.add(pc); result.push(pc); placed.add(id); result.push(id);
       }
-    };
+    }
 
-    // Group by parent-key so siblings cluster together
-    var pkGroups={};
-    members.forEach(function(id){
-      if(parentsOf[id].length===0) return;
-      var k=parentsOf[id].slice().sort().join('|');
-      if(!pkGroups[k]) pkGroups[k]=[];
-      pkGroups[k].push(id);
-    });
-    Object.values(pkGroups).forEach(function(grp){
-      grp.forEach(function(id){ placeNode(id); });
+    // Sort siblings by connection order (earlier-added children come first = leftmost)
+    Object.values(pkMap).forEach(function(grp){
+      // Sort by index in S.connections to preserve "oldest child first" order
+      grp.sort(function(a,b){
+        var ia=S.connections.findIndex(function(c){return c.type==='padre'&&c.to===a;});
+        var ib=S.connections.findIndex(function(c){return c.type==='padre'&&c.to===b;});
+        return ia-ib;
+      });
+      grp.forEach(function(sib,i){
+        if(placed.has(sib)) return;
+        if(i===0) placeLeft(sib); else placeRight(sib);
+      });
     });
 
-    // Remaining (no parents in this gen): insert before their partner
+    // Remaining
     members.forEach(function(id){
       if(placed.has(id)) return;
-      var p=coupleOf[id];
-      if(p && placed.has(p)){
-        var idx=result.indexOf(p);
-        placed.add(id);
-        result.splice(idx, 0, id); // insert LEFT of partner
-      } else {
-        placeNode(id);
-      }
+      var pc=primaryCouple(id);
+      if(pc&&placed.has(pc)){
+        placed.add(id); result.splice(result.indexOf(pc),0,id);
+      } else { placeGender(id); }
     });
 
     flatGen[g]=result;
   });
 
-  // Step 3: assign X bottom-up, center parents over children
-  var posX={};
+  // ── Step 5: compute X ────────────────────────────────────
+  // Gap between nodes: if two adjacent nodes are siblings-with-couple, use DOUBLE gap
+  function gapBetween(a, b){
+    // If a and b are siblings (same parent key) AND either has a couple in their group → double gap
+    var ka=sibKey(a), kb=sibKey(b);
+    if(ka&&kb&&ka===kb){
+      var hasCoupleA=!!primaryCouple(a);
+      var hasCoupleB=!!primaryCouple(b);
+      if(hasCoupleA||hasCoupleB) return GAP_X*2 + CW; // extra card-width of space
+    }
+    return GAP_X;
+  }
 
-  var gensRev=gens.slice().reverse();
-  gensRev.forEach(function(g){
+  var posX={}, posY={};
+  // Initial sequential placement
+  gens.forEach(function(g){
     var order=flatGen[g];
     var cursor=PAD;
-    var gdone=new Set();
-
-    order.forEach(function(id){
-      if(gdone.has(id)) return;
-
-      // Build group: same parent-key + their partners
-      var grp=[id]; gdone.add(id);
-      var myKey=parentsOf[id].slice().sort().join('|');
-
-      order.forEach(function(other){
-        if(gdone.has(other)) return;
-        var ok=parentsOf[other].slice().sort().join('|');
-        var sameParents=(myKey && myKey===ok);
-        var isPartnerOfGroup=grp.some(function(g){ return coupleOf[g]===other; });
-        if(sameParents||isPartnerOfGroup){ grp.push(other); gdone.add(other); }
-      });
-
-      // Collect all children of group
-      var allCh=[];
-      grp.forEach(function(gid){
-        childrenOf[gid].forEach(function(c){
-          if(!allCh.includes(c)) allCh.push(c);
-        });
-      });
-      var chX=allCh.filter(function(c){ return posX[c]!==undefined; })
-                   .map(function(c){ return posX[c]; });
-
-      var left;
-      if(chX.length>0){
-        var minCh=Math.min.apply(null,chX);
-        var maxCh=Math.max.apply(null,chX);
-        var childCenter=(minCh+maxCh+CW)/2;
-        left=childCenter-(grp.length*CW)/2;
-        if(left<cursor) left=cursor;
-      } else {
-        left=cursor;
-      }
-
-      // Place in flatGen order
-      var ordered=order.filter(function(oid){ return grp.includes(oid); });
-      ordered.forEach(function(oid,i){ posX[oid]=left+i*CW; });
-      cursor=left+grp.length*CW+20;
+    order.forEach(function(id, i){
+      if(posX[id]===undefined) posX[id]=cursor;
+      var nextGap=i<order.length-1?gapBetween(id,order[i+1]):GAP_X;
+      cursor=Math.max(cursor,posX[id])+CW+nextGap;
     });
   });
 
-  // Step 4: apply
+  // Iterative centering
+  for(var iter=0;iter<8;iter++){
+    // Top-down: center sibling blocks under parents
+    gens.forEach(function(g){
+      var order=flatGen[g];
+      var done=new Set();
+      order.forEach(function(id){
+        if(done.has(id)) return;
+        var pars=parentsOf[id]; if(!pars.length) return;
+        var myKey=sibKey(id);
+        var sibs=order.filter(function(o){return sibKey(o)===myKey&&parentsOf[o].length>0;});
+        var block=[], blockSet=new Set();
+        sibs.forEach(function(s){
+          done.add(s);
+          if(!blockSet.has(s)){block.push(s);blockSet.add(s);}
+          var pc=primaryCouple(s);
+          if(pc&&(byGen[g]||[]).includes(pc)&&!isSecondary[pc]){
+            done.add(pc);
+            if(!blockSet.has(pc)){block.push(pc);blockSet.add(pc);}
+          }
+        });
+        var allParents=[];
+        sibs.forEach(function(s){parentsOf[s].forEach(function(pid){if(!allParents.includes(pid))allParents.push(pid);});});
+        var parentGen=gen[allParents[0]];
+        allParents.forEach(function(pid){
+          couplesOf[pid].forEach(function(cp){
+            if(gen[cp]===parentGen&&!isSecondary[cp]&&!allParents.includes(cp))allParents.push(cp);
+          });
+        });
+        var pxs=allParents.map(function(p){return posX[p]||0;});
+        if(!pxs.length) return;
+        var parentCenter=(Math.min.apply(null,pxs)+Math.max.apply(null,pxs)+CW)/2;
+        var orderedBlock=order.filter(function(o){return blockSet.has(o);});
+        // Compute block width using gapBetween
+        var blockW=0;
+        orderedBlock.forEach(function(o,i){
+          blockW+=CW;
+          if(i<orderedBlock.length-1) blockW+=gapBetween(o,orderedBlock[i+1]);
+        });
+        var newLeft=parentCenter-blockW/2;
+        var cx=newLeft;
+        orderedBlock.forEach(function(o,i){
+          posX[o]=cx;
+          if(i<orderedBlock.length-1) cx+=CW+gapBetween(o,orderedBlock[i+1]);
+          else cx+=CW+GAP_X;
+        });
+      });
+      // Resolve overlaps respecting variable gaps
+      var sorted=order.slice().sort(function(a,b){return posX[a]-posX[b];});
+      var cursor=PAD;
+      sorted.forEach(function(id,i){
+        if(posX[id]<cursor) posX[id]=cursor;
+        var ng=i<sorted.length-1?gapBetween(id,sorted[i+1]):GAP_X;
+        cursor=posX[id]+CW+ng;
+      });
+    });
+
+    // Bottom-up: center parents over children
+    var gRev=gens.slice().reverse();
+    gRev.forEach(function(g){
+      var order=flatGen[g];
+      var done=new Set();
+      order.forEach(function(id){
+        if(done.has(id)) return;
+        var ch=childrenOf[id]; if(!ch.length) return;
+        var unit=[id]; done.add(id);
+        var pc=primaryCouple(id);
+        if(pc&&(byGen[g]||[]).includes(pc)&&!isSecondary[pc]){done.add(pc);unit.push(pc);}
+        var allCh=[];
+        unit.forEach(function(uid){childrenOf[uid].forEach(function(cid){if(!allCh.includes(cid))allCh.push(cid);});});
+        if(!allCh.length) return;
+        var childGen=gen[allCh[0]];
+        var expCh=allCh.slice();
+        allCh.forEach(function(cid){
+          var cp=primaryCouple(cid);
+          if(cp&&gen[cp]===childGen&&!isSecondary[cp]&&!expCh.includes(cp))expCh.push(cp);
+        });
+        var cxs=expCh.map(function(c){return posX[c]||0;});
+        var childCenter=(Math.min.apply(null,cxs)+Math.max.apply(null,cxs)+CW)/2;
+        var orderedUnit=order.filter(function(o){return unit.includes(o);});
+        var unitW=0;
+        orderedUnit.forEach(function(o,i){
+          unitW+=CW;
+          if(i<orderedUnit.length-1) unitW+=gapBetween(o,orderedUnit[i+1]);
+        });
+        var newLeft=childCenter-unitW/2;
+        if(newLeft<PAD) newLeft=PAD;
+        var cx=newLeft;
+        orderedUnit.forEach(function(o,i){
+          posX[o]=cx;
+          if(i<orderedUnit.length-1) cx+=CW+gapBetween(o,orderedUnit[i+1]);
+        });
+      });
+      // Resolve overlaps
+      var sorted=order.slice().sort(function(a,b){return posX[a]-posX[b];});
+      var cursor=PAD;
+      sorted.forEach(function(id,i){
+        if(posX[id]<cursor) posX[id]=cursor;
+        var ng=i<sorted.length-1?gapBetween(id,sorted[i+1]):GAP_X;
+        cursor=posX[id]+CW+ng;
+      });
+    });
+  }
+
+  // ── Step 6: Y positions (collapsed-height-aware) ──────────
+  var genY={};
+  var curY=PAD;
+  gens.forEach(function(g){
+    genY[g]=curY;
+    var maxH=0;
+    (byGen[g]||[]).forEach(function(id){ var h=cardH(id); if(h>maxH)maxH=h; });
+    if(!maxH) maxH=H_EXP;
+    curY+=maxH+GAP_Y;
+  });
   ids.forEach(function(id){
-    S.people[id].x = posX[id]!==undefined ? posX[id] : PAD;
-    S.people[id].y = PAD + gen[id]*CH;
+    if(!isSecondary[id])
+      posY[id]=genY[gen[id]]!==undefined?genY[gen[id]]:PAD+gen[id]*(H_EXP+GAP_Y);
   });
 
-  renderAll(); persist(); fitScreen(); toast('Árbol organizado ✓');
+  // ── Step 7: secondary couples — diagonal from main's primary couple side ──
+  Object.keys(isSecondary).forEach(function(secId){
+    var info=isSecondary[secId];
+    var mainId=info.ofId;
+    var idx=info.idx;
+    var mainX=posX[mainId]!==undefined?posX[mainId]:PAD;
+    var mainYv=posY[mainId]!==undefined?posY[mainId]:PAD;
+    var pc=couplesOf[mainId][0];
+    var pcX=pc&&posX[pc]!==undefined?posX[pc]:mainX+CW+GAP_X;
+    // Direction: secondary goes same side as primary couple, stepping further
+    var goRight=(pcX>mainX);
+    // Step: each secondary is one STAG further than the previous
+    posX[secId]=goRight ? pcX+STAG_X*(idx) : mainX-STAG_X*idx;
+    posY[secId]=mainYv+STAG_Y*idx;
+  });
+
+  // ── Step 8: apply ─────────────────────────────────────────
+  ids.forEach(function(id){
+    S.people[id].x=Math.max(0,posX[id]!==undefined?posX[id]:PAD);
+    S.people[id].y=posY[id]!==undefined?posY[id]:PAD;
+  });
+
+  renderAll(); persist(); toast(t('organized'));
 }
 
-/* ══════════════════════════════════════
-   SELECT
-══════════════════════════════════════ */
+
 function selectCard(id){
   S.selectedId=id;
-  S.selectedIds.clear(); if(id)S.selectedIds.add(id);
-  document.querySelectorAll('.card').forEach(function(c){ c.classList.toggle('selected',c.dataset.id===id||S.selectedIds.has(c.dataset.id)); });
+  S.selectedIds.clear(); if(id) S.selectedIds.add(id);
+  document.querySelectorAll('.card').forEach(function(c){
+    c.classList.toggle('selected', c.dataset.id===id||S.selectedIds.has(c.dataset.id));
+  });
 }
 
 /* ══════════════════════════════════════
    PANELS
 ══════════════════════════════════════ */
-function closePanel(){document.getElementById('panel').style.display='none';S.panelMode=null;S.editingId=null;S.photoData=null;}
-function openAddPanel(){S.panelMode='add';S.editingId=null;S.photoData=null;showPanel('Nueva Persona',formHTML(null));bindRadio();bindFormKeys();}
-function openEditPanel(id){S.panelMode='edit';S.editingId=id;S.photoData=S.people[id]&&S.people[id].photo||null;selectCard(id);showPanel('Editar Persona',formHTML(S.people[id]));bindRadio();bindFormKeys();}
+function closePanel(){
+  document.getElementById('panel').style.display='none';
+  S.panelMode=null; S.editingId=null; S.photoData=null;
+}
+function openAddPanel(){
+  S.panelMode='add'; S.editingId=null; S.photoData=null;
+  showPanel(t('newPerson'), formHTML(null));
+  bindRadio(); bindFormKeys();
+}
+function openEditPanel(id){
+  S.panelMode='edit'; S.editingId=id;
+  S.photoData=(S.people[id]&&S.people[id].photo)||null;
+  selectCard(id);
+  showPanel(t('editPerson'), formHTML(S.people[id]));
+  bindRadio(); bindFormKeys();
+}
 function bindFormKeys(){
   document.getElementById('panel').querySelectorAll('input[type=text]').forEach(function(inp){
-    inp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();savePerson();}});
+    inp.addEventListener('keydown',function(e){
+      if(e.key==='Enter'){e.preventDefault();savePerson();}
+    });
   });
-  var ni=document.getElementById('f-firstname');if(ni){ni.focus();ni.select();}
+  var ni=document.getElementById('f-firstname');
+  if(ni){ni.focus();ni.select();}
 }
 
 function openDetailPanel(id){
-  if(!S.people[id])return;
+  if(!S.people[id]) return;
   selectCard(id);
   var p=S.people[id];
   var conns=S.connections.filter(function(c){return c.from===id||c.to===id;}).map(function(c){
     var oid=c.from===id?c.to:c.from;
-    var o=S.people[oid];if(!o)return null;
+    var o=S.people[oid]; if(!o) return null;
     var lbl;
-    if(c.type==='pareja')  lbl='Pareja';
-    else if(c.type==='hermano') lbl='Hermano/a';
-    else if(c.type==='padre') lbl=c.from===id?'Padre/Madre de':'Hijo/a de';
+    if(c.type==='pareja'){
+      var pConns=S.connections.filter(function(x){return x.type==='pareja'&&(x.from===id||x.to===id);});
+      if(pConns.length>1){ var pi=pConns.indexOf(c); lbl = pi===0 ? t('relPareja') : t('relPareja')+' '+(pi+1); }
+      else lbl=t('relPareja');
+    }
+    else if(c.type==='hermano') lbl=t('relHermano');
+    else if(c.type==='padre')   lbl=c.from===id?t('relPadreMadre'):t('relHijo');
     return{c:c,o:o,oid:oid,lbl:lbl};
   }).filter(Boolean);
-  var av=p.photo?('<img src="'+p.photo+'" alt="">'):('<span style="font-family:\'Playfair Display\',serif;font-size:17px;font-weight:700;color:#fff;letter-spacing:-0.5px">'+cardInitials(p)+'</span>');
-  var body='<div class="dav-area">'+
-    '<div class="dav">'+av+'</div>'+
-    '<div class="dname">'+esc(fullName(p))+'</div>'+
-    '<div class="dsub">'+esc(p.role||({masculino:'👨',femenino:'👩',otro:'🧑'}[p.gender]||'🧑'))+'</div>'+
-    '</div>'+
-    '<div class="dbody">'+
-    (p.birth?'<div class="drow"><span class="dlabel">Nacimiento</span><span class="dval">'+p.birth+(p.birthplace?' · '+esc(p.birthplace):'')+'</span></div>':'')+
-    (p.death?'<div class="drow"><span class="dlabel">Fallecimiento</span><span class="dval">'+p.death+'</span></div>':'')+
-    (p.bio?'<div class="divider"></div><p class="dbio">'+esc(p.bio)+'</p>':'')+
-    '<div class="divider"></div>'+
-    '<div class="hint-box">💡 <strong>Vincular:</strong> arrastrá desde un punto ● del borde hasta otra tarjeta.<br><strong>Mover canvas:</strong> botón del medio del mouse.</div>'+
-    '<div style="font-weight:700;font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Vínculos ('+conns.length+')</div>'+
-    '<ul class="clist">'+
-    conns.map(function(item){
-      var c=item.c,o=item.o,lbl=item.lbl;
-      return '<li><div style="display:flex;align-items:center;gap:7px">'+
-        '<div class="mav '+gc(o.gender)+'">'+(o.photo?'<img src="'+o.photo+'" alt="">':cardInitials(o))+'</div>'+
-        '<div><div style="font-weight:700;font-size:12px">'+esc(fullName(o))+'</div>'+
-        '<div style="font-size:10px;color:var(--text2)">'+lbl+'</div></div></div>'+
-        '<button class="rx" onclick="removeConn(\''+c.from+'\',\''+c.to+'\',\''+id+'\')">✕</button></li>';
-    }).join('')+
-    '</ul>'+
-    '<div class="divider"></div>'+
-    '<button class="btn btn-gold btn-full" onclick="openEditPanel(\''+id+'\')">✏️ Editar persona</button>'+
-    '<button class="btn btn-red btn-full" onclick="askDelete(\''+id+'\')">🗑 Eliminar persona</button>'+
-    '</div>';
-  showPanel('Perfil',body,true);
+
+  var avInner = p.photo
+    ? '<img src="'+p.photo+'" alt="">'
+    : '<span style="font-family:Playfair Display,serif;font-size:17px;font-weight:700;color:#fff;letter-spacing:-0.5px">'+cardInitials(p)+'</span>';
+
+  var linksHtml = conns.map(function(item){
+    var mavInner = item.o.photo
+      ? '<img src="'+item.o.photo+'" alt="">'
+      : cardInitials(item.o);
+    return '<li>'
+      +'<div style="display:flex;align-items:center;gap:7px">'
+      +'<div class="mav '+gc(item.o.gender)+'">'+mavInner+'</div>'
+      +'<div>'
+        +'<div style="font-weight:700;font-size:12px">'+esc(fullName(item.o))+'</div>'
+        +'<div style="font-size:10px;color:var(--text2)">'+item.lbl+'</div>'
+      +'</div>'
+      +'</div>'
+      +'<button class="rx" onclick="removeConn(\''+item.c.from+'\',\''+item.c.to+'\',\''+id+'\')">✕</button>'
+      +'</li>';
+  }).join('');
+
+  var birthLine = p.birth
+    ? '<div class="drow"><span class="dlabel">'+t('birth')+'</span><span class="dval">'+p.birth+(p.birthplace?' · '+esc(p.birthplace):'')+'</span></div>'
+    : '';
+  var deathLine = p.death
+    ? '<div class="drow"><span class="dlabel">'+t('death')+'</span><span class="dval">'+p.death+'</span></div>'
+    : '';
+  var bioLine = p.bio ? '<div class="divider"></div><p class="dbio">'+esc(p.bio)+'</p>' : '';
+  var roleIcon = {masculino:'👨',femenino:'👩',otro:'🧑'}[p.gender]||'🧑';
+
+  var body = '<div class="dav-area">'
+    +'<div class="dav">'+avInner+'</div>'
+    +'<div class="dname">'+esc(fullName(p))+'</div>'
+    +'<div class="dsub">'+esc(p.role||roleIcon)+'</div>'
+    +'</div>'
+    +'<div class="dbody">'
+    +birthLine+deathLine+bioLine
+    +'<div class="divider"></div>'
+    +'<div class="hint-box">💡 '+t('hintLink')+'<br>'+t('hintPan')+'</div>'
+    +'<div style="font-weight:700;font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">'+t('links')+' ('+conns.length+')</div>'
+    +'<ul class="clist">'+linksHtml+'</ul>'
+    +'<div class="divider"></div>'
+    +'<button class="btn btn-gold btn-full" onclick="openEditPanel(\''+id+'\')">'+t('editBtn')+'</button>'
+    +'<button class="btn btn-red btn-full" onclick="askDelete(\''+id+'\')">'+t('deleteBtn')+'</button>'
+    +'</div>';
+
+  showPanel(t('profile'), body, true);
 }
 
-/* ══════════════════════════════════════
-   DELETE
-══════════════════════════════════════ */
+
 function askDelete(id){
-  S.deletingId=id; S.deletingConn=null;
-  document.getElementById('del-title').textContent='Eliminar persona';
-  document.getElementById('del-name').textContent=fullName(S.people[id])||'esta persona';
+  S.deletingId=id; S.deletingConn=null; S._bulkDeleteIds=null;
+  document.getElementById('del-title').textContent=t('deletePerson');
+  document.getElementById('del-name').textContent=fullName(S.people[id])||'?';
   document.getElementById('del-sub').style.display='block';
-  document.getElementById('del-sub').textContent='También se borran todos sus vínculos.';
+  document.getElementById('del-sub').textContent=t('deleteAlsoLinks');
   document.getElementById('del-modal').classList.add('open');
 }
-function cancelDel(){document.getElementById('del-modal').classList.remove('open');S.deletingId=null;S.deletingConn=null;S._bulkDeleteIds=null;}
+function cancelDel(){
+  document.getElementById('del-modal').classList.remove('open');
+  S.deletingId=null; S.deletingConn=null; S._bulkDeleteIds=null;
+}
 function confirmDel(){
   document.getElementById('del-modal').classList.remove('open');
   if(S._bulkDeleteIds){
@@ -1207,40 +1673,37 @@ function confirmDel(){
       delete S.people[id];
       S.connections=S.connections.filter(function(c){return c.from!==id&&c.to!==id;});
       var card=document.querySelector('[data-id="'+id+'"]');
-      if(card)card.remove();
+      if(card) card.remove();
     });
-    S.selectedIds.clear();S.selectedId=null;
-    renderConns();persist();closePanel();
-    if(!Object.keys(S.people).length)document.getElementById('empty').style.display='block';
-    toast(bids.length+' personas eliminadas');
+    S.selectedIds.clear(); S.selectedId=null;
+    renderConns(); persist(); closePanel();
+    if(!Object.keys(S.people).length) document.getElementById('empty').style.display='block';
+    toast(bids.length+' '+t('bulkDelete'));
     return;
   }
   if(S.deletingConn!==null){
     S.connections.splice(S.deletingConn,1);
     S.deletingConn=null;
-    renderConns();persist();toast('Vínculo eliminado');
-    return;
+    renderConns(); persist(); toast(t('linkDeleted')); return;
   }
-  var id=S.deletingId;if(!id)return;
+  var id=S.deletingId; if(!id) return;
   delete S.people[id];
   S.connections=S.connections.filter(function(c){return c.from!==id&&c.to!==id;});
   var card=document.querySelector('[data-id="'+id+'"]');
-  if(card)card.remove();
-  renderConns();persist();
+  if(card) card.remove();
+  renderConns(); persist();
   S.deletingId=null;
-  if(S.selectedId===id){closePanel();S.selectedId=null;}
-  if(!Object.keys(S.people).length)document.getElementById('empty').style.display='block';
-  toast('Persona eliminada');
+  if(S.selectedId===id){ closePanel(); S.selectedId=null; }
+  if(!Object.keys(S.people).length) document.getElementById('empty').style.display='block';
+  toast(t('personDeleted'));
 }
-
-/* ══════════════════════════════════════
-   REMOVE CONNECTION
-══════════════════════════════════════ */
 function removeConn(from,to,reopen){
-  S.connections=S.connections.filter(function(c){return!(c.from===from&&c.to===to)&&!(c.from===to&&c.to===from);});
-  renderConns();persist();
-  if(reopen)openDetailPanel(reopen);
-  toast('Vínculo eliminado');
+  S.connections=S.connections.filter(function(c){
+    return !((c.from===from&&c.to===to)||(c.from===to&&c.to===from));
+  });
+  renderConns(); persist();
+  if(reopen) openDetailPanel(reopen);
+  toast(t('linkDeleted'));
 }
 
 /* ══════════════════════════════════════
@@ -1249,31 +1712,35 @@ function removeConn(from,to,reopen){
 function openRelModal(fromId,toId){
   S.relFrom=fromId; S.relTo=toId;
   var a=fullName(S.people[fromId])||'?', b=fullName(S.people[toId])||'?';
-  var dup=S.connections.some(function(c){return(c.from===fromId&&c.to===toId)||(c.from===toId&&c.to===fromId);});
-  if(dup){toast('Ya existe un vínculo entre estas personas');S.relFrom=null;S.relTo=null;return;}
+  var dup=S.connections.some(function(c){
+    return (c.from===fromId&&c.to===toId)||(c.from===toId&&c.to===fromId);
+  });
+  if(dup){ toast(t('dupLink')); S.relFrom=null; S.relTo=null; return; }
   var port=S.wiringFromPort||'';
-  var preType='pareja';
-  if(port==='t') preType='hijo';
-  else if(port==='b') preType='padre';
-  document.getElementById('rel-modal-title').textContent='Tipo de vínculo';
+  var preType=port==='t'?'hijo':port==='b'?'padre':'pareja';
+  document.getElementById('rel-modal-title').textContent=t('linkType');
   document.getElementById('rel-modal-sub').textContent=a+' ↔ '+b;
   document.getElementById('rel-type').innerHTML=
-    '<option value="padre"'+(preType==='padre'?' selected':'')+'>👇 "'+a+'" es Padre/Madre de "'+b+'"</option>'+
-    '<option value="hijo"'+(preType==='hijo'?' selected':'')+'>👆 "'+b+'" es Padre/Madre de "'+a+'"</option>'+
-    '<option value="pareja"'+(preType==='pareja'?' selected':'')+'>↔ Pareja / Cónyuges</option>'+
-    '<option value="hermano">↔ Hermanos/as</option>';
+    '<option value="padre"'+(preType==='padre'?' selected':'')+'>'+t('padre')+' "'+b+'"</option>'+
+    '<option value="hijo"'+(preType==='hijo'?' selected':'')+'>'+t('hijo')+' "'+a+'"</option>'+
+    '<option value="pareja"'+(preType==='pareja'?' selected':'')+'>'+t('couple')+'</option>'+
+    '<option value="hermano">'+t('sibling')+'</option>';
   document.getElementById('rel-modal').classList.add('open');
 }
-function cancelRel(){document.getElementById('rel-modal').classList.remove('open');S.relFrom=null;S.relTo=null;}
+function cancelRel(){
+  document.getElementById('rel-modal').classList.remove('open');
+  S.relFrom=null; S.relTo=null;
+}
 function confirmRel(){
-  var from=S.relFrom,to=S.relTo,type=document.getElementById('rel-type').value;
-  if(type==='hijo'){var tmp=from;from=to;to=tmp;type='padre';}
+  var from=S.relFrom, to=S.relTo;
+  var type=document.getElementById('rel-type').value;
+  if(type==='hijo'){ var tmp=from; from=to; to=tmp; type='padre'; }
   S.connections.push({from:from,to:to,type:type});
-  renderConns();persist();
+  renderConns(); persist();
   document.getElementById('rel-modal').classList.remove('open');
   openDetailPanel(S.relFrom||from);
-  S.relFrom=null;S.relTo=null;S.wiringFromPort=null;
-  toast('Vínculo creado ✓');
+  S.relFrom=null; S.relTo=null; S.wiringFromPort=null;
+  toast(t('linkCreated'));
 }
 
 
@@ -1288,29 +1755,30 @@ function showPanel(title,body,noPad=false){
 ══════════════════════════════════════ */
 function formHTML(p){
   p=p||{};
-  const photoHtml=p.photo
-    ?`<div style="text-align:center;margin-bottom:7px"><img src="${p.photo}" id="photo-prev" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid var(--gold)"></div><div class="pu-area" onclick="document.getElementById('photo-file').click()">📷 Cambiar foto</div>`
-    :`<div class="pu-area" onclick="document.getElementById('photo-file').click()">📷 Subir foto (opcional)</div><div id="pp-wrap" style="display:none;text-align:center;margin-top:7px"><img id="photo-prev" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid var(--gold)"></div>`;
+  var photoHtml=p.photo
+    ?`<div style="text-align:center;margin-bottom:7px"><img src="${p.photo}" id="photo-prev" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid var(--gold)"></div><div class="pu-area" onclick="document.getElementById('photo-file').click()">${t('photoChange')}</div>`
+    :`<div class="pu-area" onclick="document.getElementById('photo-file').click()">${t('photoUpload')}</div><div id="pp-wrap" style="display:none;text-align:center;margin-top:7px"><img id="photo-prev" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid var(--gold)"></div>`;
   return `
     <div class="fg">${photoHtml}</div>
-    <div class="fg"><label>Nombre *</label><input type="text" id="f-firstname" value="${esc(p.firstName||p.name||'')}" placeholder="Ej: Juan"></div>
-    <div class="fg"><label>Segundo nombre</label><input type="text" id="f-middlename" value="${esc(p.middleName||'')}" placeholder="Ej: Carlos (opcional)"></div>
-    <div class="fg"><label>Apellido/s *</label><input type="text" id="f-lastname" value="${esc(p.lastName||'')}" placeholder="Ej: García López"></div>
-    <div class="fg"><label>Género</label><div class="rg">
-      <div class="ro male ${(!p.gender||p.gender==='masculino')?'sel':''}" data-g="masculino">👨 Hombre</div>
-      <div class="ro female ${p.gender==='femenino'?'sel':''}" data-g="femenino">👩 Mujer</div>
-      <div class="ro neutral ${p.gender==='otro'?'sel':''}" data-g="otro">🧑 Otro</div>
+    <div class="fg"><label>${t('firstName')}</label><input type="text" id="f-firstname" value="${esc(p.firstName||p.name||'')}" placeholder="Juan"></div>
+    <div class="fg"><label>${t('middleName')}</label><input type="text" id="f-middlename" value="${esc(p.middleName||'')}" placeholder="Carlos"></div>
+    <div class="fg"><label>${t('lastName')}</label><input type="text" id="f-lastname" value="${esc(p.lastName||'')}" placeholder="García López"></div>
+    <div class="fg"><label>${t('gender')}</label><div class="rg">
+      <div class="ro male ${(!p.gender||p.gender==='masculino')?'sel':''}" data-g="masculino">${t('male')}</div>
+      <div class="ro female ${p.gender==='femenino'?'sel':''}" data-g="femenino">${t('female')}</div>
+      <div class="ro neutral ${p.gender==='otro'?'sel':''}" data-g="otro">${t('other')}</div>
     </div></div>
-    <div class="fg"><label>Rol</label><input type="text" id="f-role" value="${esc(p.role||'')}" placeholder="Abuelo, Tío, Primo..."></div>
-    <div class="fg"><label>Año nacimiento</label><input type="text" id="f-birth" value="${p.birth||''}" placeholder="1945"></div>
-    <div class="fg"><label>Año fallecimiento</label><input type="text" id="f-death" value="${p.death||''}" placeholder="(dejar vacío si vive)"></div>
-    <div class="fg"><label>Lugar de nacimiento</label><input type="text" id="f-birthplace" value="${esc(p.birthplace||'')}" placeholder="Buenos Aires"></div>
-    <div class="fg"><label>Notas / biografía</label><textarea id="f-bio" placeholder="Historia de vida...">${esc(p.bio||'')}</textarea></div>
+    <div class="fg"><label>${t('role')}</label><input type="text" id="f-role" value="${esc(p.role||'')}" placeholder="${t('rolePlaceholder')}"></div>
+    <div class="fg"><label>${t('birthYear')}</label><input type="text" id="f-birth" value="${p.birth||''}" placeholder="1945"></div>
+    <div class="fg"><label>${t('deathYear')}</label><input type="text" id="f-death" value="${p.death||''}" placeholder="2010"></div>
+    <div class="fg"><label>${t('birthplace')}</label><input type="text" id="f-birthplace" value="${esc(p.birthplace||'')}" placeholder="${t('birthPlaceholder')}"></div>
+    <div class="fg"><label>${t('notes')}</label><textarea id="f-bio" placeholder="${t('notesPlaceholder')}">${esc(p.bio||'')}</textarea></div>
     <div style="display:flex;gap:7px;margin-top:4px">
-      <button class="btn btn-gold" style="flex:1" onclick="savePerson()">💾 Guardar</button>
-      <button class="btn btn-ghost" style="color:var(--text2);border-color:#ccc" onclick="closePanel()">Cancelar</button>
+      <button class="btn btn-gold" style="flex:1" onclick="savePerson()">${t('save')}</button>
+      <button class="btn btn-ghost" style="color:var(--text2);border-color:#ccc" onclick="closePanel()">${t('cancel')}</button>
     </div>`;
 }
+
 function bindRadio(){
   document.querySelectorAll('.ro[data-g]').forEach(el=>{
     el.addEventListener('click',function(){
@@ -1335,7 +1803,7 @@ function savePerson(){
   const firstName=(document.getElementById('f-firstname').value||'').trim();
   const middleName=(document.getElementById('f-middlename').value||'').trim();
   const lastName=(document.getElementById('f-lastname').value||'').trim();
-  if(!firstName&&!lastName){toast('El nombre es obligatorio');return;}
+  if(!firstName&&!lastName){toast(t('nameRequired'));return;}
   const gender=(document.querySelector('.ro.sel[data-g]')||{}).dataset?.g||'masculino';
   const data={
     firstName,middleName,lastName,
@@ -1351,14 +1819,14 @@ function savePerson(){
   if(S.panelMode==='edit'&&S.editingId){
     Object.assign(S.people[S.editingId],data);
     buildCard(S.editingId);renderConns();
-    toast('Persona actualizada ✓');
+    toast(t('personUpdated'));
   }else{
     const id=uid();
     const ids=Object.keys(S.people),cols=Math.max(1,Math.ceil(Math.sqrt(ids.length+1)));
     data.x=(ids.length%cols)*230+70;data.y=Math.floor(ids.length/cols)*180+70;
     S.people[id]=data;buildCard(id);
     document.getElementById('empty').style.display='none';
-    renderConns();toast('Persona agregada ✓');
+    renderConns();toast(t('personAdded'));
   }
   persist();closePanel();
 }
@@ -1369,14 +1837,14 @@ function savePerson(){
 function exportData(){
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([JSON.stringify({people:S.people,connections:S.connections,nextId:S.nextId},null,2)],{type:'application/json'}));
-  a.download='arbol-genealogico.json';a.click();toast('Árbol exportado');
+  a.download='arbol-genealogico.json';a.click();toast(t('exported'));
 }
 function handleImport(e){
   const f=e.target.files[0];if(!f)return;
   const r=new FileReader();
   r.onload=ev=>{
-    try{const d=JSON.parse(ev.target.result);S.people=d.people||{};S.connections=d.connections||[];S.nextId=d.nextId||1;persist();renderAll();fitScreen();toast('Árbol importado ✓');}
-    catch{toast('Error al leer el archivo');}
+    try{const d=JSON.parse(ev.target.result);S.people=d.people||{};S.connections=d.connections||[];S.nextId=d.nextId||1;persist();renderAll();fitScreen();toast(t('imported'));}
+    catch{toast(t('importError'));}
   };
   r.readAsText(f);e.target.value='';
 }
@@ -1388,6 +1856,323 @@ function toast(msg){
   const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
   clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2600);
 }
+
+/* ══════════════════════════════════════
+   I18N
+══════════════════════════════════════ */
+var LANG={
+  es:{
+    title:'Árbol Genealógico',
+    add:'+ Agregar',addIcon:'+',
+    export:'Exportar',import_:'Importar',
+    organize:'🔀 Organizar',fit:'⊞ Ajustar',
+    newPerson:'Nueva Persona',editPerson:'Editar Persona',profile:'Perfil',
+    firstName:'Nombre *',middleName:'Segundo nombre',lastName:'Apellido/s *',
+    gender:'Género',male:'👨 Hombre',female:'👩 Mujer',other:'🧑 Otro',
+    role:'Rol / parentesco',birthYear:'Año nacimiento',deathYear:'Año fallecimiento',
+    birthplace:'Lugar de nacimiento',notes:'Notas / biografía',
+    save:'💾 Guardar',cancel:'Cancelar',
+    birth:'Nacimiento',death:'Fallecimiento',
+    links:'Vínculos',addLink:'+ Vincular con otra persona',
+    editBtn:'✏️ Editar persona',deleteBtn:'🗑 Eliminar persona',
+    deletePerson:'Eliminar persona',deleteLink:'Eliminar vínculo',
+    deleteConfirm:'¿Eliminar',deleteAlsoLinks:'También se borran todos sus vínculos.',
+    delete_:'Eliminar',
+    linkType:'Tipo de vínculo',
+    modifyLink:'Vínculo familiar',changeType:'Cambiar tipo de relación',
+    padre:'👇 es Padre/Madre de',hijo:'👆 es Padre/Madre de',couple:'↔ Pareja / Cónyuges',sibling:'↔ Hermanos/as',
+    linkCreated:'Vínculo creado ✓',linkDeleted:'Vínculo eliminado',
+    personAdded:'Persona agregada ✓',personUpdated:'Persona actualizada ✓',personDeleted:'Persona eliminada',
+    organized:'Árbol organizado ✓',exported:'Árbol exportado',imported:'Árbol importado ✓',
+    importError:'Error al leer el archivo',nameRequired:'El nombre es obligatorio',
+    dupLink:'Ya existe un vínculo entre estas personas',
+    hintLink:'<strong>Vincular:</strong> arrastrá desde un punto ● del borde hasta otra tarjeta.',
+    hintPan:'<strong>Mover canvas:</strong> botón del medio / 1 dedo.',
+    relPadreMadre:'Padre/Madre',relPareja:'Pareja',relHermano:'Hermano/a',relHijo:'Hijo/a',
+    parentPort:'Padre/Madre',childPort:'Hijo/a',couplePort:'Pareja/Hermano',
+    emptyTitle:'Tu árbol está vacío',emptyHint:'Doble clic en el canvas para empezar',
+    photoUpload:'📷 Subir foto (opcional)',photoChange:'📷 Cambiar foto',
+    nodesSelected:'nodo seleccionado','nodesSelectedPlural':'nodos seleccionados',
+    coupleOrder:'Número de pareja',
+    bulkDelete:'personas seleccionadas',
+    birthPlaceholder:'Ej: Buenos Aires',notesPlaceholder:'Historia de vida...',
+    rolePlaceholder:'Abuelo, Tío, Primo...',
+  },
+  en:{
+    title:'Family Tree',
+    add:'+ Add',addIcon:'+',
+    export:'Export',import_:'Import',
+    organize:'🔀 Layout',fit:'⊞ Fit',
+    newPerson:'New Person',editPerson:'Edit Person',profile:'Profile',
+    firstName:'First name *',middleName:'Middle name',lastName:'Last name(s) *',
+    gender:'Gender',male:'👨 Male',female:'👩 Female',other:'🧑 Other',
+    role:'Role / relation',birthYear:'Birth year',deathYear:'Death year',
+    birthplace:'Place of birth',notes:'Notes / biography',
+    save:'💾 Save',cancel:'Cancel',
+    birth:'Birth',death:'Death',
+    links:'Links',addLink:'+ Link to another person',
+    editBtn:'✏️ Edit person',deleteBtn:'🗑 Delete person',
+    deletePerson:'Delete person',deleteLink:'Delete link',
+    deleteConfirm:'Delete',deleteAlsoLinks:'All their links will also be deleted.',
+    delete_:'Delete',
+    linkType:'Link type',
+    modifyLink:'Family link',changeType:'Change relationship type',
+    padre:'👇 is Parent of',hijo:'👆 is Parent of',couple:'↔ Couple / Spouses',sibling:'↔ Siblings',
+    linkCreated:'Link created ✓',linkDeleted:'Link deleted',
+    personAdded:'Person added ✓',personUpdated:'Person updated ✓',personDeleted:'Person deleted',
+    organized:'Tree organized ✓',exported:'Tree exported',imported:'Tree imported ✓',
+    importError:'Error reading file',nameRequired:'Name is required',
+    dupLink:'A link already exists between these people',
+    hintLink:'<strong>Link:</strong> drag from a port ● on the card edge to another card.',
+    hintPan:'<strong>Move canvas:</strong> middle button / 1 finger.',
+    relPadreMadre:'Parent',relPareja:'Couple',relHermano:'Sibling',relHijo:'Child',
+    parentPort:'Parent',childPort:'Child',couplePort:'Couple/Sibling',
+    emptyTitle:'Your tree is empty',emptyHint:'Double-click on the canvas to start',
+    photoUpload:'📷 Upload photo (optional)',photoChange:'📷 Change photo',
+    nodesSelected:'node selected',nodesSelectedPlural:'nodes selected',
+    coupleOrder:'Couple order',
+    bulkDelete:'people selected',
+    birthPlaceholder:'e.g. Buenos Aires',notesPlaceholder:'Life story...',
+    rolePlaceholder:'Grandparent, Uncle, Cousin...',
+  }
+};
+var currentLang='es';
+function t(k){ return (LANG[currentLang]||LANG.es)[k]||LANG.es[k]||k; }
+function setLang(lang){
+  currentLang=lang;
+  try{localStorage.setItem('gt_lang',lang);}catch(e){}
+  applyLangToUI();
+}
+function toggleLang(){
+  setLang(currentLang==='es'?'en':'es');
+}
+function applyLangToUI(){
+  // Static UI strings
+  document.title=t('title');
+  document.querySelectorAll('[data-t]').forEach(function(el){
+    var k=el.dataset.t;
+    if(el.tagName==='INPUT'&&el.type==='text') el.placeholder=t(k);
+    else el.innerHTML=t(k);
+  });
+  // Update lang button
+  var flag=document.getElementById('lang-flag');
+  var code=document.getElementById('lang-code');
+  if(flag) flag.textContent=currentLang==='es'?'🇦🇷':'🇺🇸';
+  if(code) code.textContent=currentLang==='es'?'ES':'EN';
+  // Re-render if panel is open
+  if(S.panelMode==='add') openAddPanel();
+  else if(S.panelMode==='edit'&&S.editingId) openEditPanel(S.editingId);
+  else if(S.selectedId) openDetailPanel(S.selectedId);
+  // Update toolbar
+  document.querySelectorAll('.tbtn[data-action="organize"]').forEach(function(b){b.textContent=t('organize');});
+  document.querySelectorAll('.tbtn[data-action="fit"]').forEach(function(b){b.textContent=t('fit');});
+  // Empty state
+  var emH=document.querySelector('#empty h2');
+  var emP=document.querySelector('#empty p');
+  if(emH) emH.textContent=t('emptyTitle');
+  if(emP) emP.innerHTML=t('emptyHint');
+  // Legend labels
+  var legs=document.querySelectorAll('.leg-label');
+  if(legs[0]) legs[0].textContent=t('relPadreMadre')+' → '+t('relHijo');
+  if(legs[1]) legs[1].textContent=t('relPareja');
+  if(legs[2]) legs[2].textContent=t('relHermano');
+}
+
+/* ══════════════════════════════════════
+   TOUCH EVENTS
+══════════════════════════════════════ */
+(function(){
+  var T={
+    lastTap:0, tapTimer:null,
+    panning:false, panStart:null,
+    pinching:false, pinchDist:0,
+    draggingCard:null, dragOffset:null, didDrag:false,
+    wiringFrom:null, wiringPort:null
+  };
+
+  function dist(t1,t2){
+    var dx=t1.clientX-t2.clientX, dy=t1.clientY-t2.clientY;
+    return Math.sqrt(dx*dx+dy*dy);
+  }
+  function midpoint(t1,t2){
+    return{x:(t1.clientX+t2.clientX)/2, y:(t1.clientY+t2.clientY)/2};
+  }
+  function cwRelative(clientX,clientY){
+    var r=cwEl.getBoundingClientRect();
+    return{x:clientX-r.left, y:clientY-r.top};
+  }
+  function canvasCoords(clientX,clientY){
+    return{x:(clientX-S.panX)/S.zoom, y:(clientY-S.panY)/S.zoom};
+  }
+
+  cwEl.addEventListener('touchstart', function(e){
+    var touches=e.touches;
+
+    if(touches.length===2){
+      // Pinch zoom start
+      e.preventDefault();
+      T.panning=false; T.draggingCard=null;
+      T.pinching=true;
+      T.pinchDist=dist(touches[0],touches[1]);
+      var mid=midpoint(touches[0],touches[1]);
+      T.pinchMid=cwRelative(mid.x,mid.y);
+      T.panAtPinch={x:S.panX,y:S.panY};
+      T.zoomAtPinch=S.zoom;
+      return;
+    }
+
+    if(touches.length===1){
+      e.preventDefault();
+      var t=touches[0];
+      var target=document.elementFromPoint(t.clientX,t.clientY);
+
+      // Port touch → start wiring
+      var portEl=target && target.closest('.port');
+      if(portEl){
+        var id=portEl.dataset.id, port=portEl.dataset.port;
+        T.wiringFrom={id:id,port:port};
+        S.wiringFrom={id:id,port:port};
+        S.wiringFromPort=port;
+        var r=cwEl.getBoundingClientRect();
+        S.wireMouseX=t.clientX-r.left; S.wireMouseY=t.clientY-r.top;
+        document.body.classList.add('wiring');
+        drawWire();
+        return;
+      }
+
+      // Card button touch (edit/delete/view)
+      var ctaEl=target && target.closest('.cta');
+      if(ctaEl){
+        var action=ctaEl.dataset.action;
+        var cardEl2=ctaEl.closest('.card');
+        var id2=cardEl2 && cardEl2.dataset.id;
+        if(id2){
+          if(action==='edit')  { openEditPanel(id2); }
+          else if(action==='del')   { askDelete(id2); }
+          else if(action==='view')  { selectCard(id2); openDetailPanel(id2); }
+        }
+        return;
+      }
+
+      // Card head touch → drag card or tap to open
+      var cardEl=target && target.closest('.card');
+      if(cardEl){
+        var id=cardEl.dataset.id;
+        var p=S.people[id];
+        if(p){
+          // double-tap detection → edit
+          var now=Date.now();
+          if(now-T.lastTap<300 && T.lastTapId===id){
+            clearTimeout(T.tapTimer);
+            openEditPanel(id);
+            T.lastTap=0; return;
+          }
+          T.lastTap=now; T.lastTapId=id;
+          T.tapTimer=setTimeout(function(){
+            if(!T.didDrag){ selectCard(id); openDetailPanel(id); }
+          }, 280);
+
+          T.draggingCard=id; T.didDrag=false;
+          var cc=canvasCoords(t.clientX,t.clientY);
+          T.dragOffset={x:cc.x-(p.x||0), y:cc.y-(p.y||0)};
+          document.body.classList.add('no-select');
+        }
+        return;
+      }
+
+      // double-tap on empty canvas → add person
+      // but NOT if tapping toolbar/zoom buttons
+      var now=Date.now();
+      if(now-T.lastTap<300 && !T.lastTapId){
+        var tgt2=document.elementFromPoint(t.clientX,t.clientY);
+        var isUI=tgt2&&(tgt2.closest('.tbtn')||tgt2.closest('.zbt')||tgt2.closest('.zbts')||tgt2.closest('.toolbar')||tgt2.closest('button'));
+        if(!isUI){
+          clearTimeout(T.tapTimer);
+          openAddPanel(); T.lastTap=0; return;
+        }
+      }
+      T.lastTap=now; T.lastTapId=null;
+
+      // Single finger on empty canvas → pan
+      T.panning=true;
+      T.panStart={x:t.clientX-S.panX, y:t.clientY-S.panY};
+    }
+  },{passive:false});
+
+  cwEl.addEventListener('touchmove', function(e){
+    var touches=e.touches;
+    e.preventDefault();
+
+    if(touches.length===2 && T.pinching){
+      var d=dist(touches[0],touches[1]);
+      var scale=d/T.pinchDist;
+      var newZoom=Math.max(0.2, Math.min(2.5, T.zoomAtPinch*scale));
+      var mid=midpoint(touches[0],touches[1]);
+      var rel=cwRelative(mid.x,mid.y);
+      S.panX=rel.x-(rel.x-T.panAtPinch.x)*(newZoom/T.zoomAtPinch);
+      S.panY=rel.y-(rel.y-T.panAtPinch.y)*(newZoom/T.zoomAtPinch);
+      S.zoom=newZoom;
+      applyTransform();
+      return;
+    }
+
+    if(touches.length===1){
+      var t=touches[0];
+
+      if(S.wiringFrom){
+        var r=cwEl.getBoundingClientRect();
+        S.wireMouseX=t.clientX-r.left; S.wireMouseY=t.clientY-r.top;
+        var target=findCardUnderMouse(S.wireMouseX,S.wireMouseY);
+        document.querySelectorAll('.card').forEach(function(c){
+          c.classList.toggle('drop-target',c.dataset.id===target&&target!==S.wiringFrom.id);
+        });
+        S.wiringTo=target&&target!==S.wiringFrom.id?target:null;
+        drawWire(); return;
+      }
+
+      if(T.draggingCard){
+        var cc=canvasCoords(t.clientX,t.clientY);
+        var p=S.people[T.draggingCard];
+        var nx=cc.x-T.dragOffset.x, ny=cc.y-T.dragOffset.y;
+        if(Math.abs(nx-(p.x||0))>3||Math.abs(ny-(p.y||0))>3){
+          T.didDrag=true;
+          clearTimeout(T.tapTimer);
+        }
+        p.x=nx; p.y=ny;
+        var card=document.querySelector('[data-id="'+T.draggingCard+'"]');
+        if(card){card.style.left=nx+'px';card.style.top=ny+'px';}
+        renderConns(); return;
+      }
+
+      if(T.panning){
+        S.panX=t.clientX-T.panStart.x;
+        S.panY=t.clientY-T.panStart.y;
+        applyTransform();
+      }
+    }
+  },{passive:false});
+
+  cwEl.addEventListener('touchend', function(e){
+    e.preventDefault();
+
+    if(S.wiringFrom){
+      document.body.classList.remove('wiring');
+      document.querySelectorAll('.card').forEach(function(c){c.classList.remove('drop-target');});
+      document.getElementById('wire-svg').innerHTML='';
+      var toId=S.wiringTo, fromId=S.wiringFrom.id;
+      S.wiringFrom=null; S.wiringTo=null;
+      if(toId) openRelModal(fromId, toId);
+      return;
+    }
+
+    if(T.draggingCard){
+      persist();
+      T.draggingCard=null; T.dragOffset=null;
+      document.body.classList.remove('no-select');
+    }
+    T.panning=false; T.pinching=false;
+  },{passive:false});
+})();
 
 /* ══════════════════════════════════════
    KEYBOARD
@@ -1428,7 +2213,9 @@ function askDeleteMultiple(ids){
 /* ══════════════════════════════════════
    INIT
 ══════════════════════════════════════ */
-loadData();renderAll();applyTransform();
+try{var _sl=localStorage.getItem('gt_lang');if(_sl)currentLang=_sl;}catch(e){}
+loadData();renderAll();applyTransform();setTimeout(fitScreen,50);
+applyLangToUI();
 </script>
 </body>
 </html>
