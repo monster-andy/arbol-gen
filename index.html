@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Árbol Genealógico v1.8 - 2025 -->
+<!-- Árbol Genealógico v1.9 - 2025 -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -102,8 +102,8 @@ header{background:var(--bark2);padding:10px 16px;display:flex;align-items:center
 .avatar img{width:100%;height:100%;object-fit:cover;}
 .av-txt{font-family:'Playfair Display',serif;color:#fff;font-size:11px;font-weight:700;letter-spacing:-0.5px;}
 .card-name{font-family:'Playfair Display',serif;color:#fff;font-size:12px;font-weight:500;line-height:1.25;max-height:2.5em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
-.card-body{padding:6px 10px 4px;}
-.card-years{font-size:10px;color:var(--text2);margin-bottom:2px;}
+.card-body{padding:8px 11px 6px;}
+.card-years{font-size:10px;color:var(--text2);margin-bottom:3px;}
 .card-role{font-size:10px;color:var(--leaf);font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
 .card-btns{display:flex;gap:3px;padding:0 6px 7px;}
 .cta{flex:1;padding:4px 2px;border:1px solid #e0d8cc;background:var(--cream);border-radius:5px;cursor:pointer;font-size:11px;color:var(--text2);transition:all .12s;touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
@@ -394,6 +394,7 @@ body.wiring .port{background:var(--gold);border-color:var(--gold2);}
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--leaf);flex-shrink:0"></div><span style="font-size:10px;color:#888">↑ padre / ↓ hijo</span></div>
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--gold);flex-shrink:0"></div><span style="font-size:10px;color:#888">← → pareja / hermano</span></div>
       <div class="legend-row" style="color:#aaa;font-size:10px">2× clic: editar</div>
+      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.9</div>
     </div>
 
     <div class="zbts">
@@ -450,6 +451,19 @@ body.wiring .port{background:var(--gold);border-color:var(--gold2);}
     <div class="modal-foot">
       <button class="btn btn-ghost" style="color:var(--text2);border-color:#ccc" onclick="cancelRel()">Cancelar</button>
       <button class="btn btn-gold" onclick="confirmRel()">Vincular</button>
+    </div>
+  </div>
+</div>
+
+<!-- HERMANO PARENT MODAL -->
+<div class="overlay" id="hermano-modal">
+  <div class="modal" style="text-align:center">
+    <h3>🤝 Vincular con los mismos padres</h3>
+    <p id="hermano-q-text" style="color:var(--text2);font-size:14px;margin:0 0 8px;line-height:1.5"></p>
+    <p style="color:var(--text2);font-size:12px">Si confirmás, se crean los vínculos automáticamente.</p>
+    <div class="modal-foot" style="justify-content:center;margin-top:16px">
+      <button class="btn btn-ghost" style="color:var(--text2);border-color:#ccc" onclick="cancelHermanoParents()">No, después</button>
+      <button class="btn btn-gold" onclick="confirmHermanoParents()">✓ Sí, mismos padres</button>
     </div>
   </div>
 </div>
@@ -515,6 +529,8 @@ const S = {
   _bulkDeleteIds:null, _reorderPersonId:null,
   _justMarqueed:false,
   collapsed:{},  // id → true if collapsed
+  _newNodeX:undefined, _newNodeY:undefined,
+  _pendingHermano:null,
 };
 
 function persist(){try{localStorage.setItem('gt3',JSON.stringify({people:S.people,connections:S.connections,nextId:S.nextId,collapsed:S.collapsed}));}catch(e){}}
@@ -522,7 +538,21 @@ function loadData(){try{const d=JSON.parse(localStorage.getItem('gt3')||'null');
 
 function applyTransform(){document.getElementById('canvas').style.transform=`translate3d(${S.panX}px,${S.panY}px,0) scale(${S.zoom})`;}
 function doZoom(d){const nz=Math.max(.2,Math.min(2.5,S.zoom+d));const r=cwEl.getBoundingClientRect();S.panX=r.width/2-(r.width/2-S.panX)*(nz/S.zoom);S.panY=r.height/2-(r.height/2-S.panY)*(nz/S.zoom);S.zoom=nz;applyTransform();}
-function fitScreen(){const ids=Object.keys(S.people);if(!ids.length)return;let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;for(const id of ids){const p=S.people[id];mnx=Math.min(mnx,p.x||0);mny=Math.min(mny,p.y||0);mxx=Math.max(mxx,(p.x||0)+175);mxy=Math.max(mxy,(p.y||0)+120);}const r=cwEl.getBoundingClientRect(),pad=100;const sx=(r.width-2*pad)/(mxx-mnx||1),sy=(r.height-2*pad)/(mxy-mny||1);S.zoom=Math.max(.2,Math.min(1.5,Math.min(sx,sy)));S.panX=pad-mnx*S.zoom;S.panY=pad-mny*S.zoom;applyTransform();}
+function fitScreen(){
+  const ids=Object.keys(S.people);if(!ids.length)return;
+  let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
+  for(const id of ids){const p=S.people[id];mnx=Math.min(mnx,p.x||0);mny=Math.min(mny,p.y||0);mxx=Math.max(mxx,(p.x||0)+175);mxy=Math.max(mxy,(p.y||0)+120);}
+  const r=cwEl.getBoundingClientRect();
+  const pad=80;
+  const treeW=mxx-mnx||1, treeH=mxy-mny||1;
+  const sx=(r.width-2*pad)/treeW, sy=(r.height-2*pad)/treeH;
+  S.zoom=Math.max(.2,Math.min(1.5,Math.min(sx,sy)));
+  // Center the tree in the visible canvas area
+  const scaledW=treeW*S.zoom, scaledH=treeH*S.zoom;
+  S.panX=Math.round((r.width-scaledW)/2 - mnx*S.zoom);
+  S.panY=Math.round((r.height-scaledH)/2 - mny*S.zoom);
+  applyTransform();
+}
 function resetView(){fitScreen();}
 
 const cwEl=document.getElementById('cw');
@@ -695,10 +725,14 @@ function renderConns(){
   // Draw padre connections (orthogonal bus style)
   Object.values(parentGroups).forEach(({parents,children})=>{
     const vParents=parents.filter(id=>S.people[id]);
-    const vChildren=children.filter(id=>S.people[id]);
+    // Sort children left-to-right by X so bus lines never cross
+    const vChildren=children.filter(id=>S.people[id])
+      .sort((a,b)=>(S.people[a].x||0)-(S.people[b].x||0));
     if(!vParents.length||!vChildren.length)return;
 
-    const parentPts=vParents.map(id=>portCanvasPos(id,'b'));
+    // Sort parents left-to-right too
+    const vParentsSorted=vParents.sort((a,b)=>(S.people[a].x||0)-(S.people[b].x||0));
+    const parentPts=vParentsSorted.map(id=>portCanvasPos(id,'b'));
     const childPts=vChildren.map(id=>portCanvasPos(id,'t'));
     const parentBottomY=Math.max(...parentPts.map(p=>p.y));
     const childTopY=Math.min(...childPts.map(p=>p.y));
@@ -707,7 +741,7 @@ function renderConns(){
     const busX1=Math.min(...allX),busX2=Math.max(...allX);
 
     // Detect secondary couple parent
-    const hasSecParent=vParents.some(pid=>
+    const hasSecParent=vParentsSorted.some(pid=>
       S.connections.some(c=>{
         if(c.type!=='pareja')return false;
         const other=c.from===pid?c.to:c.from;
@@ -716,7 +750,7 @@ function renderConns(){
       })
     );
 
-    vParents.forEach((id,i)=>{const pt=parentPts[i];svg.appendChild(mkLine(pt.x,pt.y,pt.x,busY,col_padre,2));});
+    vParentsSorted.forEach((id,i)=>{const pt=parentPts[i];svg.appendChild(mkLine(pt.x,pt.y,pt.x,busY,col_padre,2));});
     if(busX1<busX2)svg.appendChild(mkLine(busX1,busY,busX2,busY,col_padre,2));
     vChildren.forEach((id,i)=>{
       const pt=childPts[i];
@@ -749,7 +783,7 @@ function renderConns(){
       latLabel=coupleIdx===0?t('relPareja'):t('relPareja')+' '+(coupleIdx+1);
     }else{latLabel=t('relHermano');}
     const col=conn.type==='pareja'?col_pareja:col_hermano;
-    const dash=conn.type==='hermano'?'5 4':isSecCouple?'3 5':'9 4';
+    const dash=conn.type==='hermano'?'5 4':isSecCouple?'3 5':'none';
     const lw=isSecCouple?1.5:2.5;
     const acx=(a.x||0)+87.5,bcx=(b.x||0)+87.5;
     const ap=acx<=bcx?'r':'l',bp=acx<=bcx?'l':'r';
@@ -766,7 +800,7 @@ function renderConns(){
     hit.dataset.connIdx=i;hit.addEventListener('click',onConnClick);svg.appendChild(hit);
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
     path.setAttribute('d',d);path.setAttribute('stroke',col);path.setAttribute('stroke-width',String(lw));
-    path.setAttribute('fill','none');path.setAttribute('stroke-dasharray',dash);
+    path.setAttribute('fill','none');if(dash!=='none')path.setAttribute('stroke-dasharray',dash);
     path.setAttribute('pointer-events','none');if(isSecCouple)path.setAttribute('opacity','0.75');
     svg.appendChild(path);
     const lx=(fp.x+tp.x)/2,ly=Math.min(fp.y,tp.y)+(yOff>0?yOff:0)-8;
@@ -1033,15 +1067,38 @@ function openRelModal(fromId,toId){
     return (c.from===fromId&&c.to===toId)||(c.from===toId&&c.to===fromId);
   });
   if(dup){ toast(t('dupLink')); S.relFrom=null; S.relTo=null; return; }
+
+  // Port semantics determine pre-selected type AND option order:
+  //   top port    → dragged upward = looking for a parent → pre-select "b is parent of a"
+  //   bottom port → dragged downward = connecting to child → pre-select "a is parent of b"
+  //   side ports  → horizontal = couple or sibling
   var port=S.wiringFromPort||'';
-  var preType=port==='t'?'hijo':port==='b'?'padre':'pareja';
+  var preType = port==='t' ? 'hijo' : port==='b' ? 'padre' : 'pareja';
+
   document.getElementById('rel-modal-title').textContent=t('linkType');
-  document.getElementById('rel-modal-sub').textContent=a+' ↔ '+b;
-  document.getElementById('rel-type').innerHTML=
-    '<option value="padre"'+(preType==='padre'?' selected':'')+'>'+(t('padre'))+' "'+b+'"</option>'+
-    '<option value="hijo"'+(preType==='hijo'?' selected':'')+'>'+(t('hijo'))+' "'+a+'"</option>'+
-    '<option value="pareja"'+(preType==='pareja'?' selected':'')+'>'+t('couple')+'</option>'+
-    '<option value="hermano">'+t('sibling')+'</option>';
+  // Show clear directional sub-label based on port
+  var subLabel = port==='t'
+    ? '⬆ "'+b+'" es padre/madre de "'+a+'"'
+    : port==='b'
+    ? '⬇ "'+a+'" es padre/madre de "'+b+'"'
+    : a+' ↔ '+b;
+  document.getElementById('rel-modal-sub').textContent=subLabel;
+
+  // Order options so pre-selected is always first
+  var opts='';
+  if(preType==='hijo'){
+    opts+='<option value="hijo" selected>⬆ "'+b+'" es Padre/Madre de "'+a+'"</option>';
+    opts+='<option value="padre">⬇ "'+a+'" es Padre/Madre de "'+b+'"</option>';
+  } else if(preType==='padre'){
+    opts+='<option value="padre" selected>⬇ "'+a+'" es Padre/Madre de "'+b+'"</option>';
+    opts+='<option value="hijo">⬆ "'+b+'" es Padre/Madre de "'+a+'"</option>';
+  } else {
+    opts+='<option value="pareja" selected>↔ '+t('couple')+'</option>';
+    opts+='<option value="padre">⬇ "'+a+'" es Padre/Madre de "'+b+'"</option>';
+    opts+='<option value="hijo">⬆ "'+b+'" es Padre/Madre de "'+a+'"</option>';
+  }
+  opts+='<option value="hermano">↔ '+t('sibling')+'</option>';
+  document.getElementById('rel-type').innerHTML=opts;
   document.getElementById('rel-modal').classList.add('open');
 }
 
@@ -1057,8 +1114,42 @@ function confirmRel(){
   S.connections.push({from:from,to:to,type:type});
   renderConns(); persist();
   document.getElementById('rel-modal').classList.remove('open');
+
+  // Hermano shortcut: if one sibling has parents, offer to link the other
+  if(type==='hermano'){
+    var parentsOfFrom=S.connections.filter(function(c){return c.type==='padre'&&c.to===from;}).map(function(c){return c.from;});
+    var parentsOfTo  =S.connections.filter(function(c){return c.type==='padre'&&c.to===to;}).map(function(c){return c.from;});
+    var knownParents = parentsOfFrom.length ? parentsOfFrom : (parentsOfTo.length ? parentsOfTo : null);
+    var nodeWithout  = parentsOfFrom.length&&!parentsOfTo.length ? to : (!parentsOfFrom.length&&parentsOfTo.length ? from : null);
+    if(knownParents && nodeWithout){
+      var parentNames=knownParents.map(function(pid){return fullName(S.people[pid])||'?';}).join(' y ');
+      var childName=fullName(S.people[nodeWithout])||'?';
+      S._pendingHermano={child:nodeWithout, parents:knownParents, relFrom:S.relFrom||from};
+      document.getElementById('hermano-q-text').textContent='"'+childName+'" también es hijo/a de '+parentNames+'?';
+      document.getElementById('hermano-modal').classList.add('open');
+      S.relFrom=null; S.relTo=null; S.wiringFromPort=null;
+      return;
+    }
+  }
   openDetailPanel(S.relFrom||from);
   S.relFrom=null; S.relTo=null; S.wiringFromPort=null;
+  toast(t('linkCreated'));
+}
+function confirmHermanoParents(){
+  document.getElementById('hermano-modal').classList.remove('open');
+  var info=S._pendingHermano; S._pendingHermano=null;
+  if(!info) return;
+  info.parents.forEach(function(pid){
+    var dup=S.connections.some(function(c){return c.type==='padre'&&c.from===pid&&c.to===info.child;});
+    if(!dup) S.connections.push({from:pid,to:info.child,type:'padre'});
+  });
+  renderConns(); persist(); toast(t('linkCreated'));
+  openDetailPanel(info.relFrom||info.child);
+}
+function cancelHermanoParents(){
+  document.getElementById('hermano-modal').classList.remove('open');
+  var info=S._pendingHermano; S._pendingHermano=null;
+  if(info) openDetailPanel(info.relFrom||info.child);
   toast(t('linkCreated'));
 }
 
@@ -1148,7 +1239,9 @@ function savePerson(){
   }else{
     const id=uid();
     const ids=Object.keys(S.people),cols=Math.max(1,Math.ceil(Math.sqrt(ids.length+1)));
-    data.x=(ids.length%cols)*250+80;data.y=Math.floor(ids.length/cols)*200+80;
+    data.x=S._newNodeX!==undefined ? S._newNodeX : (ids.length%cols)*250+80;
+    data.y=S._newNodeY!==undefined ? S._newNodeY : Math.floor(ids.length/cols)*200+80;
+    S._newNodeX=undefined; S._newNodeY=undefined;
     S.people[id]=data;buildCard(id);
     document.getElementById('empty').style.display='none';
     renderConns();toast(t('personAdded'));
@@ -1184,16 +1277,10 @@ function autoLayout(){
   var ids = Object.keys(S.people);
   if(!ids.length) return;
 
-  var CW      = 220;
-  var GAP_X   = 30;
-  var GAP_Y   = 70;
-  var PAD     = 80;
-  var H_EXP   = 120;
-  var H_COL   = 52;
-  var STAG_X  = CW + GAP_X;
-  var STAG_Y  = 70;
+  var CW=220, GAP_X=30, GAP_Y=120, PAD=80, H_EXP=120, H_COL=52;
+  var STAG_X=CW+GAP_X, STAG_Y=90;
 
-  function cardH(id){ return S.collapsed[id] ? H_COL : H_EXP; }
+  function cardH(id){ return S.collapsed[id]?H_COL:H_EXP; }
 
   // ── Maps ─────────────────────────────────────────────────
   var couplesOf={}, childrenOf={}, parentsOf={};
@@ -1207,19 +1294,10 @@ function autoLayout(){
       if(!parentsOf[c.to].includes(c.from))  parentsOf[c.to].push(c.from);
     }
   });
-
   function primaryCouple(id){ return couplesOf[id][0]; }
   function sibKey(id){ return parentsOf[id].slice().sort().join('|'); }
 
-  // all children of id AND id's couple
-  function familyChildren(id){
-    var ch=childrenOf[id].slice();
-    var pc=primaryCouple(id);
-    if(pc) childrenOf[pc].forEach(function(c){if(!ch.includes(c))ch.push(c);});
-    return ch;
-  }
-
-  // ── Step 1: generations ───────────────────────────────────
+  // ── Step 1: generations ──────────────────────────────────
   var gen={};
   ids.forEach(function(id){ gen[id]=0; });
   var changed=true, itr=0;
@@ -1237,14 +1315,22 @@ function autoLayout(){
         if(gen[pid]!==mx){ gen[pid]=mx; changed=true; }
       });
     });
+    // Hermano connections: force same generation (max of the two)
+    S.connections.forEach(function(c){
+      if(c.type!=='hermano') return;
+      if(gen[c.from]===undefined||gen[c.to]===undefined) return;
+      var mx=Math.max(gen[c.from],gen[c.to]);
+      if(gen[c.from]!==mx){ gen[c.from]=mx; changed=true; }
+      if(gen[c.to]!==mx){ gen[c.to]=mx; changed=true; }
+    });
   }
 
-  // ── Step 2: secondary couples ─────────────────────────────
+  // ── Step 2: secondary couples ────────────────────────────
   var isSecondary={};
   ids.forEach(function(id){
     couplesOf[id].forEach(function(pid,ci){
       if(ci===0) return;
-      if(!isSecondary[pid]) isSecondary[pid]={ofId:id,idx:ci};
+      if(!isSecondary[pid]) isSecondary[pid]={ofId:id, idx:ci};
     });
   });
 
@@ -1259,6 +1345,11 @@ function autoLayout(){
   var gens=Object.keys(byGen).map(Number).sort(function(a,b){return a-b;});
 
   // ── Step 4: flat order per generation ────────────────────
+  // KEY RULE: siblings always go toward the CENTER, couples on the OUTSIDE.
+  // Within a sibling group: first sib gets couple LEFT, last sib gets couple RIGHT.
+  // Multiple sibling groups in same gen: sorted by parent position (left-to-right).
+  // Nodes with no parents but WITH a sibling connection → same row as their hermano.
+
   var flatGen={};
   gens.forEach(function(g){
     var members=byGen[g];
@@ -1286,57 +1377,114 @@ function autoLayout(){
       if(!ok){placed.add(id);result.push(id);return;}
       var myG=S.people[id]&&S.people[id].gender;
       var pcG=S.people[pc]&&S.people[pc].gender;
-      if(myG==='masculino'||pcG==='femenino'){
+      if(myG==='masculino'||(pcG==='femenino'&&myG!=='femenino')){
         placed.add(id);result.push(id);placed.add(pc);result.push(pc);
-      } else {
+      }else{
         placed.add(pc);result.push(pc);placed.add(id);result.push(id);
       }
     }
 
+    // Group siblings by parent key
     var pkMap={};
     members.forEach(function(id){
       if(!parentsOf[id].length) return;
       var k=sibKey(id);
-      if(!pkMap[k])pkMap[k]=[];
+      if(!pkMap[k]) pkMap[k]=[];
       pkMap[k].push(id);
     });
-    // Sort siblings by connection order (oldest child first = leftmost)
+
+    // Sort sibling groups by average parent X (use gen-index as proxy if posX not ready)
+    // Sort siblings within group by connection order (oldest = leftmost)
     Object.values(pkMap).forEach(function(grp){
       grp.sort(function(a,b){
         var ia=S.connections.findIndex(function(c){return c.type==='padre'&&c.to===a;});
         var ib=S.connections.findIndex(function(c){return c.type==='padre'&&c.to===b;});
         return ia-ib;
       });
+      // First sibling: couple LEFT. Last sibling: couple RIGHT. Middle: RIGHT.
       grp.forEach(function(sib,i){
-        if(placed.has(sib))return;
-        if(i===0)placeLeft(sib);else placeRight(sib);
+        if(placed.has(sib)) return;
+        if(i===0) placeLeft(sib);
+        else      placeRight(sib);
       });
     });
+
+    // Place hermano-connected nodes adjacent to their partner in same gen
+    // (handles case where siblings have different/no shared parents)
     members.forEach(function(id){
-      if(placed.has(id))return;
-      var pc=primaryCouple(id);
-      if(pc&&placed.has(pc)){placed.add(id);result.splice(result.indexOf(pc),0,id);}
-      else placeGender(id);
+      if(placed.has(id)) return;
+      // Find a hermano connection to an already-placed node in this gen
+      var hermanoPartner=null;
+      S.connections.forEach(function(c){
+        if(c.type!=='hermano') return;
+        var other=c.from===id?c.to:c.from===id?c.to:null;
+        if(!other&&c.to===id) other=c.from;
+        if(other&&members.includes(other)&&placed.has(other)&&!hermanoPartner)
+          hermanoPartner=other;
+      });
+      if(hermanoPartner){
+        // Hermanos always go to the LEFT: find leftmost of the hermano's sibling group
+        // and insert before it (with couple to the LEFT of this node)
+        // Find the leftmost position of hermanoPartner's entire sibling group
+        var hermanoKey=sibKey(hermanoPartner);
+        var groupStart=result.indexOf(hermanoPartner);
+        if(hermanoKey){
+          result.forEach(function(o,ri){
+            var oKey=sibKey(o);
+            if(oKey===hermanoKey) groupStart=Math.min(groupStart,ri);
+            // Also include couples of the group
+            var opc=primaryCouple(o);
+            if(opc&&sibKey(opc)===hermanoKey) groupStart=Math.min(groupStart,ri);
+          });
+        }
+        if(groupStart<0) groupStart=0;
+        var toInsert=[];
+        // Place partner (couple) first if any, then this node — so couple is LEFT of hermano
+        var pc=primaryCouple(id);
+        if(pc&&members.includes(pc)&&!placed.has(pc)&&!isSecondary[pc]){
+          placed.add(pc); toInsert.push(pc);
+        }
+        placed.add(id); toInsert.push(id);
+        result.splice(groupStart,0,...toInsert);
+      } else {
+        var pc=primaryCouple(id);
+        if(pc&&placed.has(pc)){
+          placed.add(id);
+          result.splice(result.indexOf(pc),0,id);
+        } else {
+          placeGender(id);
+        }
+      }
     });
+
     flatGen[g]=result;
   });
 
-  // ── Step 5: gap between adjacent nodes ───────────────────
+  // ── Step 5: gap between adjacent nodes ──────────────────
+  // Double gap between siblings-with-couples so their partners fit
   function gapBetween(a,b){
-    var ka=sibKey(a),kb=sibKey(b);
+    var ka=sibKey(a), kb=sibKey(b);
     if(ka&&kb&&ka===kb){
       if(primaryCouple(a)||primaryCouple(b)) return GAP_X*2+CW;
     }
     return GAP_X;
   }
+  // Check if two nodes are hermano-connected (for ordering purposes)
+  function areHermanos(a,b){
+    return S.connections.some(function(c){
+      return c.type==='hermano'&&((c.from===a&&c.to===b)||(c.from===b&&c.to===a));
+    });
+  }
 
-  // ── Step 6: X positions (iterative) ──────────────────────
+  // ── Step 6: X positions (iterative centering) ────────────
   var posX={};
+
+  // Initial sequential placement
   gens.forEach(function(g){
     var order=flatGen[g];
     var cursor=PAD;
     order.forEach(function(id,i){
-      if(posX[id]===undefined)posX[id]=cursor;
+      if(posX[id]===undefined) posX[id]=cursor;
       var ng=i<order.length-1?gapBetween(id,order[i+1]):GAP_X;
       cursor=Math.max(cursor,posX[id])+CW+ng;
     });
@@ -1344,105 +1492,132 @@ function autoLayout(){
 
   function resolveOverlaps(order){
     var sorted=order.slice().sort(function(a,b){return posX[a]-posX[b];});
+    // Use PAD as minimum, but don't pull nodes left if they're already placed
     var cursor=PAD;
     sorted.forEach(function(id,i){
-      if(posX[id]<cursor)posX[id]=cursor;
+      if(posX[id]<cursor) posX[id]=cursor;
       var ng=i<sorted.length-1?gapBetween(id,sorted[i+1]):GAP_X;
       cursor=posX[id]+CW+ng;
     });
   }
+  // Align a generation's leftmost node to be no further left than
+  // the minimum X of nodes-with-connections in that generation
+  function alignGenLeft(order){
+    if(!order.length) return;
+    // Find leftmost X among nodes that have parents OR children (anchored nodes)
+    var anchorXs=order.filter(function(id){
+      return parentsOf[id].length>0 || childrenOf[id].length>0;
+    }).map(function(id){return posX[id]||0;});
+    if(!anchorXs.length) return; // all floating, leave as is
+    var anchorLeft=Math.min.apply(null,anchorXs);
+    // Find leftmost X overall in this generation
+    var allXs=order.map(function(id){return posX[id]||0;});
+    var genLeft=Math.min.apply(null,allXs);
+    // If floating nodes are further left than anchored ones, push them right
+    if(genLeft < anchorLeft-CW-GAP_X*2){
+      var shift=anchorLeft-CW-GAP_X*2-genLeft;
+      order.forEach(function(id){
+        if((posX[id]||0) < anchorLeft-GAP_X) posX[id]=(posX[id]||0)+shift;
+      });
+    }
+  }
 
-  function blockWidth(orderedBlock){
+  function blockWidth(arr){
     var w=0;
-    orderedBlock.forEach(function(o,i){
-      w+=CW;
-      if(i<orderedBlock.length-1)w+=gapBetween(o,orderedBlock[i+1]);
-    });
+    arr.forEach(function(o,i){ w+=CW; if(i<arr.length-1)w+=gapBetween(o,arr[i+1]); });
     return w;
   }
-
-  function placeBlock(orderedBlock,newLeft){
-    var cx=newLeft;
-    orderedBlock.forEach(function(o,i){
-      posX[o]=cx;
-      if(i<orderedBlock.length-1)cx+=CW+gapBetween(o,orderedBlock[i+1]);
-    });
+  function placeBlock(arr,left){
+    var cx=left;
+    arr.forEach(function(o,i){ posX[o]=cx; if(i<arr.length-1)cx+=CW+gapBetween(o,arr[i+1]); });
   }
 
-  for(var iter=0;iter<8;iter++){
-    // Top-down: center sibling blocks under parents
+  // Iterative centering with global overlap resolution after each pass
+  for(var iter=0;iter<10;iter++){
+
+    // TOP-DOWN: center each sibling block under their parents
     gens.forEach(function(g){
       var order=flatGen[g];
       var done=new Set();
       order.forEach(function(id){
-        if(done.has(id))return;
-        var pars=parentsOf[id];if(!pars.length)return;
+        if(done.has(id)) return;
+        var pars=parentsOf[id]; if(!pars.length) return;
         var myKey=sibKey(id);
-        var sibs=order.filter(function(o){return sibKey(o)===myKey&&parentsOf[o].length>0;});
+        var sibs=order.filter(function(o){ return sibKey(o)===myKey&&parentsOf[o].length>0; });
         var blockSet=new Set();
         sibs.forEach(function(s){
-          done.add(s);blockSet.add(s);
+          done.add(s); blockSet.add(s);
           var pc=primaryCouple(s);
-          if(pc&&(byGen[g]||[]).includes(pc)&&!isSecondary[pc]){done.add(pc);blockSet.add(pc);}
+          if(pc&&(byGen[g]||[]).includes(pc)&&!isSecondary[pc]){ done.add(pc); blockSet.add(pc); }
         });
+
+        // Parent center: actual parents of these siblings + their primary couples
         var allParents=[];
-        sibs.forEach(function(s){parentsOf[s].forEach(function(pid){if(!allParents.includes(pid))allParents.push(pid);});});
+        sibs.forEach(function(s){ parentsOf[s].forEach(function(pid){if(!allParents.includes(pid))allParents.push(pid);}); });
         var parentGen=gen[allParents[0]];
-        allParents.forEach(function(pid){
-          couplesOf[pid].forEach(function(cp){
-            if(gen[cp]===parentGen&&!isSecondary[cp]&&!allParents.includes(cp))allParents.push(cp);
-          });
+        var origPars=allParents.slice();
+        origPars.forEach(function(pid){
+          var pc=primaryCouple(pid);
+          if(pc&&gen[pc]===parentGen&&!isSecondary[pc]&&!allParents.includes(pc)){
+            var isCoPar=sibs.some(function(s){return parentsOf[s].includes(pc);});
+            if(isCoPar) allParents.push(pc);
+          }
         });
         var pxs=allParents.map(function(p){return posX[p]||0;});
-        if(!pxs.length)return;
+        if(!pxs.length) return;
         var parentCenter=(Math.min.apply(null,pxs)+Math.max.apply(null,pxs)+CW)/2;
         var orderedBlock=order.filter(function(o){return blockSet.has(o);});
         var bw=blockWidth(orderedBlock);
-        placeBlock(orderedBlock,parentCenter-bw/2);
+        placeBlock(orderedBlock, parentCenter-bw/2);
       });
       resolveOverlaps(order);
     });
 
-    // Bottom-up: center parents over children
+    // BOTTOM-UP: center parents over their SHARED children only
     var gRev=gens.slice().reverse();
     gRev.forEach(function(g){
       var order=flatGen[g];
       var done=new Set();
       order.forEach(function(id){
-        if(done.has(id))return;
-        var ch=familyChildren(id);if(!ch.length)return;
-        var unit=[id];done.add(id);
+        if(done.has(id)) return;
+        var unit=[id]; done.add(id);
         var pc=primaryCouple(id);
-        if(pc&&(byGen[g]||[]).includes(pc)&&!isSecondary[pc]){done.add(pc);unit.push(pc);}
-        // All children of all unit members
+        if(pc&&(byGen[g]||[]).includes(pc)&&!isSecondary[pc]){ done.add(pc); unit.push(pc); }
+
+        // Only shared children (all parents in unit)
         var allCh=[];
-        unit.forEach(function(uid){familyChildren(uid).forEach(function(cid){if(!allCh.includes(cid))allCh.push(cid);});});
-        if(!allCh.length)return;
-        // Expand to include children's couples
-        var childGen=gen[allCh[0]];
-        var expCh=allCh.slice();
-        allCh.forEach(function(cid){
-          var cp=primaryCouple(cid);
-          if(cp&&gen[cp]===childGen&&!isSecondary[cp]&&!expCh.includes(cp))expCh.push(cp);
+        childrenOf[unit[0]].forEach(function(cid){
+          var pars=parentsOf[cid];
+          if(pars.length>0&&pars.every(function(pid){return unit.includes(pid);}))
+            if(!allCh.includes(cid)) allCh.push(cid);
         });
-        var cxs=expCh.map(function(c){return posX[c]||0;});
+        if(unit.length>1){
+          childrenOf[unit[1]].forEach(function(cid){
+            var pars=parentsOf[cid];
+            if(pars.length>0&&pars.every(function(pid){return unit.includes(pid);}))
+              if(!allCh.includes(cid)) allCh.push(cid);
+          });
+        }
+        if(!allCh.length) return;
+        var cxs=allCh.map(function(c){return posX[c]||0;});
         var childCenter=(Math.min.apply(null,cxs)+Math.max.apply(null,cxs)+CW)/2;
         var orderedUnit=order.filter(function(o){return unit.includes(o);});
         var uw=blockWidth(orderedUnit);
         var newLeft=childCenter-uw/2;
-        if(newLeft<PAD)newLeft=PAD;
-        placeBlock(orderedUnit,newLeft);
+        if(newLeft<PAD) newLeft=PAD;
+        placeBlock(orderedUnit, newLeft);
       });
       resolveOverlaps(order);
     });
+
+    // Final pass: resolve overlaps and align floating nodes
+    gens.forEach(function(g){
+      resolveOverlaps(flatGen[g]);
+      alignGenLeft(flatGen[g]);
+    });
   }
 
-  // ── Step 7: Y — same generation row = same Y, accounting for secondary parents ──
-  // Key rule: all children at same generation use the SAME Y.
-  // That Y must be below ALL parents in previous generation, including secondaries.
-  // We compute genY top-down, but secondary couples affect the Y of THEIR children's generation.
-
-  // First assign genY ignoring secondaries
+  // ── Step 7: Y positions (collapsed-height-aware) ─────────
   var genY={};
   var curY=PAD;
   gens.forEach(function(g){
@@ -1452,52 +1627,18 @@ function autoLayout(){
     if(!maxH)maxH=H_EXP;
     curY+=maxH+GAP_Y;
   });
-
-  // Now adjust: for each secondary couple, find which generation its children are in,
-  // and ensure that generation's Y is below the secondary couple's Y + its height + GAP_Y
-  Object.keys(isSecondary).forEach(function(secId){
-    var info=isSecondary[secId];
-    var mainId=info.ofId;
-    var idx=info.idx;
-    var mainX=posX[mainId]||PAD;
-    var mainYv=genY[gen[mainId]]||PAD;
-    var pc=couplesOf[mainId][0];
-    var pcX=pc&&posX[pc]!==undefined?posX[pc]:mainX+CW+GAP_X;
-    var goRight=pcX>mainX;
-    var secX=goRight?pcX+STAG_X*idx:mainX-STAG_X*idx;
-    var secY=mainYv+STAG_Y*idx;
-
-    // Find children of this secondary couple
-    var secChildren=childrenOf[secId]||[];
-    var mainChildren=childrenOf[mainId]||[];
-    var sharedChildren=secChildren.concat(mainChildren.filter(function(c){return secChildren.includes(c)||parentsOf[c].includes(secId);}));
-
-    sharedChildren.forEach(function(cid){
-      var childG=gen[cid];
-      if(childG===undefined)return;
-      var minY=secY+cardH(secId)+GAP_Y;
-      if(genY[childG]<minY){
-        // Push this generation and all below it down
-        var delta=minY-genY[childG];
-        gens.forEach(function(gg){if(gg>=childG)genY[gg]+=delta;});
-      }
-    });
-  });
-
-  // Assign Y to all primary nodes
   var posY={};
   ids.forEach(function(id){
     if(!isSecondary[id])
       posY[id]=genY[gen[id]]!==undefined?genY[gen[id]]:PAD+gen[id]*(H_EXP+GAP_Y);
   });
 
-  // ── Step 8: secondary couples diagonal ───────────────────
+  // ── Step 8: secondary couples diagonal ──────────────────
   Object.keys(isSecondary).forEach(function(secId){
     var info=isSecondary[secId];
-    var mainId=info.ofId;
-    var idx=info.idx;
-    var mainX=posX[mainId]!==undefined?posX[mainId]:PAD;
-    var mainYv=posY[mainId]!==undefined?posY[mainId]:PAD;
+    var mainId=info.ofId, idx=info.idx;
+    var mainX=posX[mainId]||PAD;
+    var mainYv=posY[mainId]||PAD;
     var pc=couplesOf[mainId][0];
     var pcX=pc&&posX[pc]!==undefined?posX[pc]:mainX+CW+GAP_X;
     var goRight=pcX>mainX;
@@ -1505,7 +1646,46 @@ function autoLayout(){
     posY[secId]=mainYv+STAG_Y*idx;
   });
 
-  // ── Step 9: apply ─────────────────────────────────────────
+  // ── Step 8b: re-center children of secondary couples ─────
+  gens.forEach(function(g){
+    var order=flatGen[g];
+    order.forEach(function(id){
+      if(!parentsOf[id].length) return;
+      var hasSecPar=parentsOf[id].some(function(pid){return isSecondary[pid];});
+      if(!hasSecPar) return;
+      var myKey=sibKey(id);
+      var sibs=order.filter(function(o){return sibKey(o)===myKey&&parentsOf[o].length>0;});
+      var allParIds=[];
+      sibs.forEach(function(s){parentsOf[s].forEach(function(pid){if(!allParIds.includes(pid))allParIds.push(pid);});});
+      var pxs=allParIds.filter(function(p){return posX[p]!==undefined;}).map(function(p){return posX[p];});
+      if(!pxs.length) return;
+      var parentCenter=(Math.min.apply(null,pxs)+Math.max.apply(null,pxs)+CW)/2;
+      var bw=sibs.length*(CW+GAP_X)-GAP_X;
+      var newLeft=parentCenter-bw/2;
+      var orderedSibs=order.filter(function(o){return sibs.includes(o);});
+      orderedSibs.forEach(function(o,i){posX[o]=newLeft+i*(CW+GAP_X);});
+    });
+    resolveOverlaps(order);
+  });
+
+  // ── Step 9: adjust Y — secondary parents push children down ─
+  Object.keys(isSecondary).forEach(function(secId){
+    var info=isSecondary[secId];
+    var mainId=info.ofId;
+    var secY=posY[secId];
+    childrenOf[secId].forEach(function(cid){
+      var childG=gen[cid];
+      if(childG===undefined) return;
+      var minY=secY+cardH(secId)+GAP_Y;
+      if(genY[childG]<minY){
+        var delta=minY-genY[childG];
+        gens.forEach(function(gg){if(gg>=childG)genY[gg]+=delta;});
+        ids.forEach(function(id){if(!isSecondary[id]&&gen[id]>=childG)posY[id]=genY[gen[id]];});
+      }
+    });
+  });
+
+  // ── Step 10: apply ───────────────────────────────────────
   ids.forEach(function(id){
     S.people[id].x=Math.max(0,posX[id]!==undefined?posX[id]:PAD);
     S.people[id].y=posY[id]!==undefined?posY[id]:PAD;
@@ -1593,8 +1773,12 @@ cwEl.addEventListener('click',e=>{
 });
 cwEl.addEventListener('dblclick',e=>{
   if(e.target.closest('.card')||e.target.closest('.port')||e.target.closest('.tbtn')||e.target.closest('.zbt'))return;
+  const r=cwEl.getBoundingClientRect();
+  S._newNodeX=(e.clientX-r.left-S.panX)/S.zoom-87;
+  S._newNodeY=(e.clientY-r.top-S.panY)/S.zoom-50;
   openAddPanel();
 });
+
 function findCardUnderMouse(mx,my){
   const cx=(mx-S.panX)/S.zoom,cy=(my-S.panY)/S.zoom;
   for(const id in S.people){const p=S.people[id];if(cx>=(p.x||0)&&cx<=(p.x||0)+175&&cy>=(p.y||0)&&cy<=(p.y||0)+115)return id;}
