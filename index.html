@@ -364,6 +364,8 @@ body.wiring .port{background:var(--gold);border-color:var(--gold2);}
     </button>
     <button class="btn btn-ghost" onclick="exportData()" ontouchstart="exportData();event.preventDefault()">⬇<span class="btn-label"> Exportar</span></button>
     <button class="btn btn-ghost" onclick="document.getElementById('imp-file').click()" ontouchstart="document.getElementById('imp-file').click();event.preventDefault()">⬆<span class="btn-label"> Importar</span></button>
+    <button class="btn btn-ghost" id="btn-copy" onclick="copyTree()" ontouchstart="copyTree();event.preventDefault()" title="Copiar selección (o todo si no hay selección)">📋<span class="btn-label"> Copiar</span></button>
+    <button class="btn btn-ghost" id="btn-paste" onclick="pasteTree()" ontouchstart="pasteTree();event.preventDefault()" title="Pegar árbol desde portapapeles">📥<span class="btn-label"> Pegar</span></button>
     <button class="btn btn-gold" onclick="openAddPanel()" ontouchstart="openAddPanel();event.preventDefault()"><span class="btn-label">+ Agregar</span><span class="btn-icon-only">+</span></button>
   </div>
 </header>
@@ -455,6 +457,43 @@ body.wiring .port{background:var(--gold);border-color:var(--gold2);}
   </div>
 </div>
 
+<!-- COPY FALLBACK MODAL -->
+<div class="overlay" id="copy-fallback-modal">
+  <div class="modal">
+    <h3>📋 Copiar árbol</h3>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:10px">Tu navegador no permite acceso automático al portapapeles. Seleccioná todo el texto y copialo (Ctrl+A, Ctrl+C):</p>
+    <textarea id="copy-fallback-area" style="width:100%;height:80px;font-size:11px;font-family:monospace;resize:none;border:1px solid #ddd;border-radius:7px;padding:8px;" readonly onclick="this.select()"></textarea>
+    <div class="modal-foot">
+      <button class="btn btn-gold" style="width:100%" onclick="document.getElementById('copy-fallback-modal').classList.remove('open')">Listo</button>
+    </div>
+  </div>
+</div>
+
+<!-- PASTE FALLBACK MODAL -->
+<div class="overlay" id="paste-fallback-modal">
+  <div class="modal">
+    <h3>📥 Pegar árbol</h3>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:10px">Pegá el texto del árbol copiado (Ctrl+V):</p>
+    <textarea id="paste-fallback-area" style="width:100%;height:80px;font-size:11px;font-family:monospace;resize:none;border:1px solid #ddd;border-radius:7px;padding:8px;" placeholder="Pegá aquí el árbol..."></textarea>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" style="color:var(--text2);border-color:#ccc" onclick="document.getElementById('paste-fallback-modal').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-gold" onclick="doPasteFallback()">Importar</button>
+    </div>
+  </div>
+</div>
+
+<!-- PASTE CONFIRM MODAL -->
+<div class="overlay" id="paste-confirm-modal">
+  <div class="modal" style="text-align:center">
+    <h3>⚠️ Reemplazar árbol</h3>
+    <p id="paste-confirm-msg" style="color:var(--text2);font-size:14px">Esto reemplazará el árbol actual.<br>¿Continuás?</p>
+    <div class="modal-foot" style="justify-content:center;margin-top:16px">
+      <button class="btn btn-ghost" style="color:var(--text2);border-color:#ccc" onclick="cancelPasteImport()">Cancelar</button>
+      <button class="btn btn-red" onclick="confirmPasteImport()">Sí, reemplazar</button>
+    </div>
+  </div>
+</div>
+
 <!-- HERMANO PARENT MODAL -->
 <div class="overlay" id="hermano-modal">
   <div class="modal" style="text-align:center">
@@ -531,6 +570,7 @@ const S = {
   collapsed:{},  // id → true if collapsed
   _newNodeX:undefined, _newNodeY:undefined,
   _pendingHermano:null,
+  _pendingImport:null,
 };
 
 function persist(){try{localStorage.setItem('gt3',JSON.stringify({people:S.people,connections:S.connections,nextId:S.nextId,collapsed:S.collapsed}));}catch(e){}}
@@ -1249,6 +1289,141 @@ function savePerson(){
   persist();closePanel();
 }
 
+function copyTree(){
+  // Copy selected nodes only; if none selected, copy everything
+  var selectedIds=[...S.selectedIds];
+  var copyAll=selectedIds.length===0;
+  var ids=copyAll?Object.keys(S.people):selectedIds;
+
+  if(ids.length===0){toast('Seleccioná nodos para copiar, o hacé clic en el canvas para copiar todo');return;}
+
+  // Extract people
+  var people={};
+  ids.forEach(function(id){ if(S.people[id]) people[id]=S.people[id]; });
+
+  // Extract connections between copied nodes only
+  var connections=S.connections.filter(function(c){
+    return ids.includes(c.from)&&ids.includes(c.to);
+  });
+
+  var collapsed={};
+  ids.forEach(function(id){ if(S.collapsed[id]) collapsed[id]=true; });
+
+  var data=JSON.stringify({
+    people:people, connections:connections, nextId:S.nextId,
+    collapsed:collapsed, _v:'arbol-genealogico-v1.9', _ts:Date.now(),
+    _partial:!copyAll, _count:ids.length
+  });
+
+  var label=copyAll
+    ?('🌳 Árbol completo copiado ('+ids.length+' nodos) ✓')
+    :('📋 '+ids.length+' nodo'+(ids.length>1?'s':'')+' copiado'+(ids.length>1?'s':'')+' ✓');
+
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(data).then(function(){
+      toast(label);
+      var btn=document.getElementById('btn-copy');
+      if(btn){var orig=btn.innerHTML;btn.innerHTML='✓';setTimeout(function(){btn.innerHTML=orig;},2000);}
+    }).catch(function(){ showCopyFallback(data); });
+  } else {
+    showCopyFallback(data);
+  }
+}
+
+function showCopyFallback(data){
+  document.getElementById('copy-fallback-area').value=data;
+  document.getElementById('copy-fallback-modal').classList.add('open');
+  setTimeout(function(){document.getElementById('copy-fallback-area').select();},100);
+}
+
+function pasteTree(){
+  if(navigator.clipboard&&navigator.clipboard.readText){
+    navigator.clipboard.readText().then(function(text){
+      tryImportText(text);
+    }).catch(function(){
+      // Fallback: show paste textarea
+      document.getElementById('paste-fallback-modal').classList.add('open');
+      setTimeout(function(){document.getElementById('paste-fallback-area').focus();},100);
+    });
+  } else {
+    document.getElementById('paste-fallback-modal').classList.add('open');
+    setTimeout(function(){document.getElementById('paste-fallback-area').focus();},100);
+  }
+}
+
+function tryImportText(text){
+  try{
+    var d=JSON.parse(text.trim());
+    if(!d.people&&!d._v){toast('⚠️ El texto no es un árbol válido');return;}
+    // Ask confirmation if current tree has data
+    var hasData=Object.keys(S.people).length>0;
+    if(hasData&&!d._partial){
+      // Full tree paste: ask before replacing
+      S._pendingImport=d;
+      var msg=document.getElementById('paste-confirm-msg');
+      if(msg) msg.innerHTML='Esto reemplazará el árbol actual con el pegado completo.<br>¿Continuás?';
+      document.getElementById('paste-confirm-modal').classList.add('open');
+    } else {
+      // Partial paste (selected nodes): just merge without asking
+      applyImport(d);
+    }
+  }catch(e){toast('⚠️ No se pudo leer el árbol — verificá el texto');}
+}
+
+function applyImport(d){
+  if(d._partial){
+    // MERGE: add nodes to existing tree, remapping IDs to avoid collisions
+    var idMap={};
+    Object.keys(d.people||{}).forEach(function(oldId){
+      var newId=uid();
+      idMap[oldId]=newId;
+      var p=JSON.parse(JSON.stringify(d.people[oldId]));
+      // Offset position so pasted nodes appear near center of current view
+      var r=document.getElementById('cw').getBoundingClientRect();
+      var cx=(r.width/2-S.panX)/S.zoom;
+      var cy=(r.height/2-S.panY)/S.zoom;
+      p.x=(p.x||0)+cx-100+Math.random()*60;
+      p.y=(p.y||0)+cy-80+Math.random()*40;
+      S.people[newId]=p;
+      if(d.collapsed&&d.collapsed[oldId]) S.collapsed[newId]=true;
+    });
+    // Remap connections
+    (d.connections||[]).forEach(function(c){
+      var newFrom=idMap[c.from], newTo=idMap[c.to];
+      if(newFrom&&newTo) S.connections.push({from:newFrom,to:newTo,type:c.type});
+    });
+    // Select the newly pasted nodes
+    S.selectedIds.clear();
+    Object.values(idMap).forEach(function(newId){ S.selectedIds.add(newId); });
+    S.selectedId=Object.values(idMap)[0]||null;
+    persist();renderAll();
+    toast('📥 '+Object.keys(idMap).length+' nodo'+(Object.keys(idMap).length>1?'s':'')+' pegado'+(Object.keys(idMap).length>1?'s':'')+' ✓');
+  } else {
+    // REPLACE: full tree import
+    S.people=d.people||{};
+    S.connections=d.connections||[];
+    S.nextId=d.nextId||1;
+    S.collapsed=d.collapsed||{};
+    persist();renderAll();fitScreen();
+    toast('🌳 Árbol importado ✓');
+  }
+}
+function confirmPasteImport(){
+  document.getElementById('paste-confirm-modal').classList.remove('open');
+  var d=S._pendingImport;S._pendingImport=null;
+  if(d)applyImport(d);
+}
+function cancelPasteImport(){
+  document.getElementById('paste-confirm-modal').classList.remove('open');
+  S._pendingImport=null;
+}
+function doPasteFallback(){
+  var text=document.getElementById('paste-fallback-area').value;
+  document.getElementById('paste-fallback-modal').classList.remove('open');
+  document.getElementById('paste-fallback-area').value='';
+  tryImportText(text);
+}
+
 function exportData(){
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([JSON.stringify({people:S.people,connections:S.connections,nextId:S.nextId,collapsed:S.collapsed},null,2)],{type:'application/json'}));
@@ -1791,6 +1966,8 @@ function findCardUnderMouse(mx,my){
 ══════════════════════════════════════ */
 document.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT')return;
+  if((e.ctrlKey||e.metaKey)&&e.key==='c'&&!e.shiftKey){ copyTree(); e.preventDefault(); return; }
+  if((e.ctrlKey||e.metaKey)&&e.key==='v'){ pasteTree(); e.preventDefault(); return; }
   if(e.key==='Delete'||e.key==='Backspace'){
     if(S.selectedIds.size>1)askDeleteMultiple([...S.selectedIds]);
     else if(S.selectedId&&S.people[S.selectedId])askDelete(S.selectedId);
@@ -2007,6 +2184,8 @@ function applyLangToUI(){
 ══════════════════════════════════════ */
 document.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT')return;
+  if((e.ctrlKey||e.metaKey)&&e.key==='c'&&!e.shiftKey){ copyTree(); e.preventDefault(); return; }
+  if((e.ctrlKey||e.metaKey)&&e.key==='v'){ pasteTree(); e.preventDefault(); return; }
   if(e.key==='Delete'||e.key==='Backspace'){
     if(S.selectedIds.size>1)askDeleteMultiple([...S.selectedIds]);
     else if(S.selectedId&&S.people[S.selectedId])askDelete(S.selectedId);
