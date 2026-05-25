@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Árbol Genealógico v1.12 - 2025 -->
+<!-- Árbol Genealógico v1.14 - 2025 -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -396,7 +396,7 @@ body.wiring .port{background:var(--gold);border-color:var(--gold2);}
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--leaf);flex-shrink:0"></div><span style="font-size:10px;color:#888">↑ padre / ↓ hijo</span></div>
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--gold);flex-shrink:0"></div><span style="font-size:10px;color:#888">← → pareja / hermano</span></div>
       <div class="legend-row" style="color:#aaa;font-size:10px">2× clic: editar</div>
-      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.12</div>
+      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.14</div>
     </div>
 
     <div class="zbts">
@@ -581,7 +581,7 @@ function doZoom(d){const nz=Math.max(.2,Math.min(2.5,S.zoom+d));const r=cwEl.get
 function fitScreen(){
   const ids=Object.keys(S.people);if(!ids.length)return;
   let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
-  for(const id of ids){const p=S.people[id];mnx=Math.min(mnx,p.x||0);mny=Math.min(mny,p.y||0);mxx=Math.max(mxx,(p.x||0)+175);mxy=Math.max(mxy,(p.y||0)+120);}
+  for(const id of ids){const p=S.people[id];mnx=Math.min(mnx,p.x||0);mny=Math.min(mny,p.y||0);mxx=Math.max(mxx,(p.x||0)+175);mxy=Math.max(mxy,(p.y||0)+145);}
   const r=cwEl.getBoundingClientRect();
   const pad=80;
   const treeW=mxx-mnx||1, treeH=mxy-mny||1;
@@ -694,7 +694,7 @@ function onPortMD(e){
 function portCanvasPos(id,port){
   const p=S.people[id];if(!p)return{x:0,y:0};
   const card=document.querySelector('[data-id="'+id+'"]');
-  const ch=card?card.offsetHeight:(S.collapsed[id]?52:115);
+  const ch=card?card.offsetHeight:(S.collapsed[id]?52:145);
   const cw2=card?card.offsetWidth:175;
   const cx=p.x||0,cy=p.y||0;
   if(port==='t')return{x:cx+cw2/2,y:cy};
@@ -776,7 +776,8 @@ function renderConns(){
     const childPts=vChildren.map(id=>portCanvasPos(id,'t'));
     const parentBottomY=Math.max(...parentPts.map(p=>p.y));
     const childTopY=Math.min(...childPts.map(p=>p.y));
-    const busY=parentBottomY+(childTopY-parentBottomY)*0.5;
+    // Bus sits 25px below parents (not halfway down)
+    const busY=Math.min(parentBottomY+25, parentBottomY+(childTopY-parentBottomY)*0.35);
     const allX=[...parentPts.map(p=>p.x),...childPts.map(p=>p.x)];
     const busX1=Math.min(...allX),busX2=Math.max(...allX);
 
@@ -817,16 +818,20 @@ function renderConns(){
   // This avoids any crossing: line goes left→right in display order.
 
   // Group hermano connections by their shared parent key (sibling groups)
-  const hermanoGroups = {}; // parentKey → Set of node ids
+  // Build hermano groups using union-find on the hermano connection graph
+  // This correctly chains A-B-C even when none have parents
+  const _hParent={};
+  function _hFind(x){ if(_hParent[x]===undefined)_hParent[x]=x; return _hParent[x]===x?x:(_hParent[x]=_hFind(_hParent[x])); }
+  function _hUnion(a,b){ _hParent[_hFind(a)]=_hFind(b); }
+  lateralConns.filter(c=>c.type==='hermano').forEach(c=>{ _hUnion(c.from,c.to); });
+  // Group by root
+  const hermanoGroups = {};
   lateralConns.filter(c=>c.type==='hermano').forEach(c=>{
-    // Use sorted node IDs as group key (connect siblings that share parents)
-    const parA = S.connections.filter(x=>x.type==='padre'&&x.to===c.from).map(x=>x.from).sort().join(',');
-    const parB = S.connections.filter(x=>x.type==='padre'&&x.to===c.to).map(x=>x.from).sort().join(',');
-    // Use union of both parent sets as group key, or connection id if no parents
-    const key = (parA&&parB&&parA===parB) ? parA : (parA||parB||c.from+'_'+c.to);
-    if(!hermanoGroups[key]) hermanoGroups[key]=new Set();
-    hermanoGroups[key].add(c.from);
-    hermanoGroups[key].add(c.to);
+    [c.from,c.to].forEach(id=>{
+      const root=_hFind(id);
+      if(!hermanoGroups[root]) hermanoGroups[root]=new Set();
+      hermanoGroups[root].add(id);
+    });
   });
 
   // For each hermano group: sort by X, draw chain line between adjacent pairs
@@ -1368,7 +1373,7 @@ function copyTree(){
 
   var data=JSON.stringify({
     people:people, connections:connections, nextId:S.nextId,
-    collapsed:collapsed, _v:'arbol-genealogico-v1.12', _ts:Date.now(),
+    collapsed:collapsed, _v:'arbol-genealogico-v1.14', _ts:Date.now(),
     _partial:!copyAll, _count:ids.length
   });
 
@@ -1509,7 +1514,7 @@ function autoLayout(){
   var ids = Object.keys(S.people);
   if(!ids.length) return;
 
-  var CW=220, GAP_X=30, GAP_Y=120, PAD=80, H_EXP=120, H_COL=52;
+  var CW=220, GAP_X=40, GAP_Y=140, PAD=80, H_EXP=145, H_COL=52;
   var STAG_X=CW+GAP_X, STAG_Y=90;
 
   function cardH(id){ return S.collapsed[id]?H_COL:H_EXP; }
@@ -1697,7 +1702,7 @@ function autoLayout(){
   function gapBetween(a,b){
     var ka=sibKey(a), kb=sibKey(b);
     if(ka&&kb&&ka===kb){
-      if(primaryCouple(a)||primaryCouple(b)) return GAP_X*2+CW;
+      if(primaryCouple(a)||primaryCouple(b)) return GAP_X*3+CW;
     }
     return GAP_X;
   }
@@ -1723,14 +1728,14 @@ function autoLayout(){
   });
 
   function resolveOverlaps(order){
+    if(!order.length) return;
     var sorted=order.slice().sort(function(a,b){return posX[a]-posX[b];});
-    // Use PAD as minimum, but don't pull nodes left if they're already placed
-    var cursor=PAD;
-    sorted.forEach(function(id,i){
-      if(posX[id]<cursor) posX[id]=cursor;
-      var ng=i<sorted.length-1?gapBetween(id,sorted[i+1]):GAP_X;
-      cursor=posX[id]+CW+ng;
-    });
+    // First pass: only push right when nodes actually overlap (don't enforce PAD as start)
+    for(var i=1;i<sorted.length;i++){
+      var prev=sorted[i-1], cur=sorted[i];
+      var minX=(posX[prev]||0)+CW+gapBetween(prev,cur);
+      if((posX[cur]||0)<minX) posX[cur]=minX;
+    }
   }
   // Align a generation's leftmost node to be no further left than
   // the minimum X of nodes-with-connections in that generation
@@ -1765,7 +1770,7 @@ function autoLayout(){
   }
 
   // Iterative centering with global overlap resolution after each pass
-  for(var iter=0;iter<10;iter++){
+  for(var iter=0;iter<15;iter++){
 
     // TOP-DOWN: center each sibling block under their parents
     gens.forEach(function(g){
@@ -1816,18 +1821,23 @@ function autoLayout(){
         var pc=primaryCouple(id);
         if(pc&&(byGen[g]||[]).includes(pc)&&!isSecondary[pc]){ done.add(pc); unit.push(pc); }
 
-        // Only shared children (all parents in unit)
+        // Collect children:
+        // - If unit has 2 members (couple): only children shared by both
+        // - If unit has 1 member (single parent): all their children
         var allCh=[];
-        childrenOf[unit[0]].forEach(function(cid){
-          var pars=parentsOf[cid];
-          if(pars.length>0&&pars.every(function(pid){return unit.includes(pid);}))
+        if(unit.length>=2){
+          // Couple: only children whose parent set is exactly this couple
+          unit.forEach(function(uid){
+            childrenOf[uid].forEach(function(cid){
+              var pars=parentsOf[cid];
+              var allIn=pars.length>0&&pars.every(function(pid){return unit.includes(pid);});
+              if(allIn&&!allCh.includes(cid)) allCh.push(cid);
+            });
+          });
+        } else {
+          // Single parent: all their children
+          childrenOf[unit[0]].forEach(function(cid){
             if(!allCh.includes(cid)) allCh.push(cid);
-        });
-        if(unit.length>1){
-          childrenOf[unit[1]].forEach(function(cid){
-            var pars=parentsOf[cid];
-            if(pars.length>0&&pars.every(function(pid){return unit.includes(pid);}))
-              if(!allCh.includes(cid)) allCh.push(cid);
           });
         }
         if(!allCh.length) return;
@@ -1847,6 +1857,18 @@ function autoLayout(){
       resolveOverlaps(flatGen[g]);
       alignGenLeft(flatGen[g]);
     });
+  }
+
+  // Final pass: shift entire tree left to start at PAD
+  // (remove any accumulated right-drift from resolveOverlaps)
+  var allXs=[];
+  gens.forEach(function(g){ flatGen[g].forEach(function(id){ allXs.push(posX[id]||0); }); });
+  if(allXs.length){
+    var minX=Math.min.apply(null,allXs);
+    var shift=PAD-minX;
+    if(Math.abs(shift)>1){
+      gens.forEach(function(g){ flatGen[g].forEach(function(id){ posX[id]=(posX[id]||0)+shift; }); });
+    }
   }
 
   // ── Step 7: Y positions (collapsed-height-aware) ─────────
