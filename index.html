@@ -471,10 +471,25 @@ body.wiring .port{background:var(--gold);border-color:var(--gold2);}
 <input type="file" id="imp-file" accept=".json" style="display:none" onchange="handleImport(event)">
 <input type="file" id="photo-file" accept="image/*" style="display:none" onchange="handlePhoto(event)">
 
-<script>
-/* ══════════════════════════════════════
-   STATE
-══════════════════════════════════════ */
+<script>/* Árbol Genealógico v1.8 - 2025 */
+
+const uid=()=>'p'+(S.nextId++);
+const initials=n=>n.trim().split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
+const gc=g=>g==='masculino'?'male':g==='femenino'?'female':'neutral';
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fullName=p=>{
+  var fn=p.firstName||p.name||'';var mn=p.middleName||'';var ln=p.lastName||'';
+  var full=[fn,mn,ln].filter(Boolean).join(' ').trim();
+  if(full.length>22&&mn.length>1)mn=mn[0]+'.';
+  return[fn,mn,ln].filter(Boolean).join(' ').trim()||'Sin nombre';
+};
+const cardInitials=p=>{
+  const parts=[p.firstName||p.name||'',p.middleName||'',p.lastName||''].filter(Boolean);
+  if(parts.length>=2)return parts.map(w=>w[0]).join('').slice(0,3).toUpperCase();
+  return fullName(p).split(/\s+/).map(w=>w[0]).join('').slice(0,3).toUpperCase();
+};
+const REL_COLOR={pareja:'#C4972A',padre:'#4A7C59',hermano:'#3A6186'};
+
 const S = {
   people:{}, connections:[], nextId:1,
   selectedId:null,
@@ -502,77 +517,18 @@ const S = {
   collapsed:{},  // id → true if collapsed
 };
 
-/* ══════════════════════════════════════
-   PERSIST
-══════════════════════════════════════ */
 function persist(){try{localStorage.setItem('gt3',JSON.stringify({people:S.people,connections:S.connections,nextId:S.nextId,collapsed:S.collapsed}));}catch(e){}}
 function loadData(){try{const d=JSON.parse(localStorage.getItem('gt3')||'null');if(d){S.people=d.people||{};S.connections=d.connections||[];S.nextId=d.nextId||1;S.collapsed=d.collapsed||{};}}catch(e){}}
 
-/* ══════════════════════════════════════
-   UTILS
-══════════════════════════════════════ */
-const uid=()=>'p'+(S.nextId++);
-const initials=n=>n.trim().split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
-const gc=g=>g==='masculino'?'male':g==='femenino'?'female':'neutral';
-const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-// Build display name from parts; falls back to legacy p.name
-const fullName=p=>{
-  var fn=p.firstName||p.name||'';
-  var mn=p.middleName||'';
-  var ln=p.lastName||'';
-  // Abbreviate middle name to initial if combined name is too long
-  var full=[fn,mn,ln].filter(Boolean).join(' ').trim();
-  if(full.length>22&&mn.length>1) mn=mn[0]+'.';
-  return [fn,mn,ln].filter(Boolean).join(' ').trim()||'Sin nombre';
-};
-const cardInitials=p=>{
-  const parts=[p.firstName||p.name||'', p.middleName||'', p.lastName||''].filter(Boolean);
-  if(parts.length>=2) return parts.map(w=>w[0]).join('').slice(0,3).toUpperCase();
-  // fallback: split fullName
-  return fullName(p).split(/\s+/).map(w=>w[0]).join('').slice(0,3).toUpperCase();
-};
+function applyTransform(){document.getElementById('canvas').style.transform=`translate3d(${S.panX}px,${S.panY}px,0) scale(${S.zoom})`;}
+function doZoom(d){const nz=Math.max(.2,Math.min(2.5,S.zoom+d));const r=cwEl.getBoundingClientRect();S.panX=r.width/2-(r.width/2-S.panX)*(nz/S.zoom);S.panY=r.height/2-(r.height/2-S.panY)*(nz/S.zoom);S.zoom=nz;applyTransform();}
+function fitScreen(){const ids=Object.keys(S.people);if(!ids.length)return;let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;for(const id of ids){const p=S.people[id];mnx=Math.min(mnx,p.x||0);mny=Math.min(mny,p.y||0);mxx=Math.max(mxx,(p.x||0)+175);mxy=Math.max(mxy,(p.y||0)+120);}const r=cwEl.getBoundingClientRect(),pad=100;const sx=(r.width-2*pad)/(mxx-mnx||1),sy=(r.height-2*pad)/(mxy-mny||1);S.zoom=Math.max(.2,Math.min(1.5,Math.min(sx,sy)));S.panX=pad-mnx*S.zoom;S.panY=pad-mny*S.zoom;applyTransform();}
+function resetView(){fitScreen();}
 
-const REL_COLOR ={pareja:'#C4972A', padre:'#4A7C59', hermano:'#3A6186'};
-const REL_DASH  ={pareja:'7 4',     padre:'none',    hermano:'5 4'};
-const REL_MARKER={pareja:'dot-y',   padre:'arr-g',   hermano:'dot-b'};
-// Returns "Pareja", "Pareja 1", "Pareja 2", etc depending on how many couples a person has
-function coupleLabel(personId){
-  var coupleConns=S.connections.filter(function(c){
-    return c.type==='pareja'&&(c.from===personId||c.to===personId);
-  });
-  return coupleConns.length>1 ? null : t('relPareja'); // null = needs numbering
-}
-function coupleLabelIndexed(personId, connObj){
-  var coupleConns=S.connections.filter(function(c){
-    return c.type==='pareja'&&(c.from===personId||c.to===personId);
-  });
-  if(coupleConns.length<=1) return t('relPareja');
-  var idx=coupleConns.indexOf(connObj);
-  if(idx<0) idx=coupleConns.findIndex(function(c){return c===connObj;});
-  return t('relPareja')+' '+(idx+1);
-}
-
-function relLabel(type,fromId,toId){
-  const a=fullName(S.people[fromId])||'?', b=fullName(S.people[toId])||'?';
-  if(type==='pareja')  return 'Pareja';
-  if(type==='padre')   return 'Padre/Madre';
-  if(type==='hermano') return 'Hermano/a';
-  return type;
-}
-
-/* inverse relationship: if A is padre of B → B is hijo of A
-   We store connections as {from, to, type} where type is always canonical:
-   padre  = from is parent, to is child
-   pareja = symmetric
-   hermano= symmetric
-*/
-function inverseLabel(type){
-  if(type==='padre') return 'Hijo/a';
-  return relLabel(type,'','');
-}
+const cwEl=document.getElementById('cw');
 
 /* ══════════════════════════════════════
-   RENDER ALL
+   RENDER
 ══════════════════════════════════════ */
 function renderAll(){
   document.getElementById('canvas').querySelectorAll('.card').forEach(c=>c.remove());
@@ -581,9 +537,6 @@ function renderAll(){
   renderConns();
 }
 
-/* ══════════════════════════════════════
-   CARD
-══════════════════════════════════════ */
 function buildCard(id){
   const p=S.people[id];
   const canvas=document.getElementById('canvas');
@@ -591,13 +544,13 @@ function buildCard(id){
   if(!card){card=document.createElement('div');card.className='card';card.dataset.id=id;attachCard(card);canvas.appendChild(card);}
   const g=gc(p.gender);
   const av=p.photo?`<img src="${p.photo}" alt="">`:(`<span class="av-txt">${cardInitials(p)}</span>`);
-  const years=[p.birth,p.death].filter(Boolean).join(' – ');
-  card.style.left=(p.x||0)+'px'; card.style.top=(p.y||0)+'px';
-  var isCollapsed=S.collapsed[id]?'collapsed':'';
-  card.className='card'+( S.selectedId===id||S.selectedIds.has(id)?' selected':'')+' '+isCollapsed;
+  const years=[p.birth,p.death].filter(Boolean).join('–');
+  const isCollapsed=S.collapsed[id]?'collapsed':'';
+  card.className='card '+isCollapsed+(S.selectedId===id||S.selectedIds.has(id)?' selected':'');
+  card.style.left=(p.x||0)+'px';card.style.top=(p.y||0)+'px';
   card.innerHTML=`
     <div class="sel-ring"></div>
-    <button class="collapse-btn" onclick="toggleCollapse('${id}');event.stopPropagation()" title="Colapsar/expandir">${S.collapsed[id]?'▶':'▼'}</button>
+    <button class="collapse-btn" onclick="toggleCollapse('${id}');event.stopPropagation()">${S.collapsed[id]?'▶':'▼'}</button>
     <div class="ports">
       <div class="port port-t" data-port="t" data-id="${id}"></div>
       <div class="port port-b" data-port="b" data-id="${id}"></div>
@@ -608,11 +561,11 @@ function buildCard(id){
       <div class="avatar">${av}</div>
       <div>
         <div class="card-name">${esc(fullName(p))}</div>
-        ${S.collapsed[id]&&(p.birth||p.death)?`<div style="font-size:10px;color:rgba(255,255,255,0.7);margin-top:2px">${[p.birth,p.death].filter(Boolean).join('–')}</div>`:''}
+        ${S.collapsed[id]&&years?`<div style="font-size:10px;color:rgba(255,255,255,0.7);margin-top:2px">${years}</div>`:''}
       </div>
     </div>
     <div class="card-body">
-      ${years?`<div class="card-years">${years}</div>`:''}
+      ${years&&!S.collapsed[id]?`<div class="card-years">${years}</div>`:''}
       ${p.role?`<div class="card-role">${esc(p.role)}</div>`:''}
     </div>
     <div class="card-btns">
@@ -620,46 +573,24 @@ function buildCard(id){
       <button class="cta" data-action="view">👁</button>
       <button class="cta" data-action="del">🗑</button>
     </div>`;
-  // port mouse events
   card.querySelectorAll('.port').forEach(attachPort);
 }
 
-function toggleCollapse(id){
-  S.collapsed[id]=!S.collapsed[id];
-  persist(); buildCard(id); renderConns();
-}
-function toggleCollapseAll(){
-  var ids=Object.keys(S.people);
-  var anyExpanded=ids.some(function(id){return !S.collapsed[id];});
-  ids.forEach(function(id){ S.collapsed[id]=anyExpanded; });
-  var btn=document.getElementById('btn-collapse-all');
-  if(btn) btn.textContent=anyExpanded?'▶ Expandir':'▼ Contraer';
-  persist(); renderAll(); renderConns();
-}
 function attachCard(card){
   card.addEventListener('mousedown',onCardMD);
   card.addEventListener('click',onCardClick);
   card.addEventListener('dblclick',onCardDblClick);
 }
-
-function onCardDblClick(e){
-  if(e.target.closest('.port'))return;
-  if(e.target.dataset.action)return;
-  e.stopPropagation();
-  const id=this.dataset.id;
-  openEditPanel(id);
-}
-
 function onCardMD(e){
-  if(e.button!==0)return; // only left button drags cards
+  if(e.button!==0)return;
   const drag=e.target.closest('[data-drag]');
   if(!drag)return;
   e.stopPropagation();
   const id=drag.dataset.drag;
-  S.draggingCard=id; S.didDrag=false;
+  S.draggingCard=id;S.didDrag=false;
   const p=S.people[id];
-  const wx=(e.clientX-S.panX)/S.zoom, wy=(e.clientY-S.panY)/S.zoom;
-  S.dragOffset={x:wx-(p.x||0), y:wy-(p.y||0)};
+  const wx=(e.clientX-S.panX)/S.zoom,wy=(e.clientY-S.panY)/S.zoom;
+  S.dragOffset={x:wx-(p.x||0),y:wy-(p.y||0)};
   document.body.classList.add('no-select');
 }
 function onCardClick(e){
@@ -669,307 +600,199 @@ function onCardClick(e){
   e.stopPropagation();
   if(action==='edit'){openEditPanel(id);return;}
   if(action==='view'){openDetailPanel(id);return;}
-  if(action==='del') {askDelete(id);return;}
+  if(action==='del'){askDelete(id);return;}
   if(!S.didDrag){selectCard(id);openDetailPanel(id);}
 }
+function onCardDblClick(e){
+  if(e.target.closest('.port')||e.target.dataset.action)return;
+  e.stopPropagation();
+  openEditPanel(this.dataset.id);
+}
 
-/* ══════════════════════════════════════
-   PORTS (wire dragging)
-══════════════════════════════════════ */
 function attachPort(port){
   port.addEventListener('mousedown',onPortMD);
 }
-
 function onPortMD(e){
-  e.stopPropagation(); e.preventDefault();
-  const id=e.target.dataset.id, portSide=e.target.dataset.port;
-  S.wiringFrom={id,port:portSide};
-  S.wiringFromPort=portSide;
+  e.stopPropagation();e.preventDefault();
+  const id=e.target.dataset.id,portSide=e.target.dataset.port;
+  S.wiringFrom={id,port:portSide};S.wiringFromPort=portSide;
   const r=document.getElementById('cw').getBoundingClientRect();
-  S.wireMouseX=e.clientX-r.left; S.wireMouseY=e.clientY-r.top;
-  document.body.classList.add('wiring','no-select');
-  drawWire();
+  S.wireMouseX=e.clientX-r.left;S.wireMouseY=e.clientY-r.top;
+  document.body.classList.add('wiring');drawWire();
+}
+
+function portCanvasPos(id,port){
+  const p=S.people[id];if(!p)return{x:0,y:0};
+  const card=document.querySelector('[data-id="'+id+'"]');
+  const ch=card?card.offsetHeight:(S.collapsed[id]?52:115);
+  const cw2=card?card.offsetWidth:175;
+  const cx=p.x||0,cy=p.y||0;
+  if(port==='t')return{x:cx+cw2/2,y:cy};
+  if(port==='b')return{x:cx+cw2/2,y:cy+ch};
+  if(port==='l')return{x:cx,y:cy+ch/2};
+  if(port==='r')return{x:cx+cw2,y:cy+ch/2};
+  return{x:cx+cw2/2,y:cy+ch/2};
 }
 
 function portScreenPos(id,port){
-  const p=S.people[id]; if(!p)return{x:0,y:0};
-  // Use actual card DOM rect for accurate size
+  const p=S.people[id];if(!p)return{x:0,y:0};
   const card=document.querySelector('[data-id="'+id+'"]');
   const cwRect=document.getElementById('cw').getBoundingClientRect();
   if(card){
     const r=card.getBoundingClientRect();
-    const lx=r.left-cwRect.left, ty=r.top-cwRect.top;
-    const rw=r.width, rh=r.height;
-    if(port==='t') return{x:lx+rw/2, y:ty};
-    if(port==='b') return{x:lx+rw/2, y:ty+rh};
-    if(port==='l') return{x:lx,       y:ty+rh/2};
-    if(port==='r') return{x:lx+rw,    y:ty+rh/2};
-    return{x:lx+rw/2, y:ty+rh/2};
+    const lx=r.left-cwRect.left,ty=r.top-cwRect.top;
+    if(port==='t')return{x:lx+r.width/2,y:ty};
+    if(port==='b')return{x:lx+r.width/2,y:ty+r.height};
+    if(port==='l')return{x:lx,y:ty+r.height/2};
+    if(port==='r')return{x:lx+r.width,y:ty+r.height/2};
+    return{x:lx+r.width/2,y:ty+r.height/2};
   }
-  // fallback: compute from canvas coords
-  const cx=(p.x||0)*S.zoom+S.panX, cy=(p.y||0)*S.zoom+S.panY;
-  const cw2=175*S.zoom, ch2=115*S.zoom;
-  if(port==='t') return{x:cx+cw2/2, y:cy};
-  if(port==='b') return{x:cx+cw2/2, y:cy+ch2};
-  if(port==='l') return{x:cx,        y:cy+ch2/2};
-  if(port==='r') return{x:cx+cw2,    y:cy+ch2/2};
+  const cx=(p.x||0)*S.zoom+S.panX,cy=(p.y||0)*S.zoom+S.panY;
+  const cw2=175*S.zoom,ch2=115*S.zoom;
+  if(port==='t')return{x:cx+cw2/2,y:cy};
+  if(port==='b')return{x:cx+cw2/2,y:cy+ch2};
+  if(port==='l')return{x:cx,y:cy+ch2/2};
+  if(port==='r')return{x:cx+cw2,y:cy+ch2/2};
   return{x:cx+cw2/2,y:cy+ch2/2};
 }
 
-function nearestPort(cardId, mx, my){
-  const ports=['t','b','l','r'];
-  let best=null, bestD=Infinity;
-  for(const p of ports){const pos=portScreenPos(cardId,p);const d=Math.hypot(pos.x-mx,pos.y-my);if(d<bestD){bestD=d;best=p;}}
-  return best;
-}
-
 function drawWire(){
-  const svg=document.getElementById('wire-svg');
-  svg.innerHTML='';
+  const svg=document.getElementById('wire-svg');svg.innerHTML='';
   if(!S.wiringFrom)return;
   const port=S.wiringFrom.port;
-  const isVertical=(port==='t'||port==='b');
-  const wireCol=isVertical?'#4A7C59':'#C4972A';
-  const from=portScreenPos(S.wiringFrom.id, port);
-  const tx=S.wireMouseX, ty=S.wireMouseY;
-  // orthogonal wire: L-shaped
+  const isV=(port==='t'||port==='b');
+  const col=isV?'#4A7C59':'#C4972A';
+  const from=portScreenPos(S.wiringFrom.id,port);
+  const tx=S.wireMouseX,ty=S.wireMouseY;
   let d;
-  if(isVertical){
-    const midy=(from.y+ty)/2;
-    d=`M${from.x},${from.y} L${from.x},${midy} L${tx},${midy} L${tx},${ty}`;
-  } else {
-    const midx=(from.x+tx)/2;
-    d=`M${from.x},${from.y} L${midx},${from.y} L${midx},${ty} L${tx},${ty}`;
-  }
+  if(isV){const midy=(from.y+ty)/2;d=`M${from.x},${from.y} L${from.x},${midy} L${tx},${midy} L${tx},${ty}`;}
+  else{const midx=(from.x+tx)/2;d=`M${from.x},${from.y} L${midx},${from.y} L${midx},${ty} L${tx},${ty}`;}
   const path=document.createElementNS('http://www.w3.org/2000/svg','path');
-  path.setAttribute('d',d);
-  path.setAttribute('stroke',wireCol);
-  path.setAttribute('stroke-width','2');
-  path.setAttribute('stroke-dasharray','6 3');
-  path.setAttribute('fill','none');
-  path.setAttribute('opacity','0.85');
+  path.setAttribute('d',d);path.setAttribute('stroke',col);path.setAttribute('stroke-width','2');
+  path.setAttribute('stroke-dasharray','6 3');path.setAttribute('fill','none');path.setAttribute('opacity','0.85');
   svg.appendChild(path);
-
 }
 
 /* ══════════════════════════════════════
-   CONNECTIONS SVG
+   CONNECTIONS
 ══════════════════════════════════════ */
-function portCanvasPos(id, port){
-  const p=S.people[id]; if(!p)return{x:0,y:0};
-  const card=document.querySelector('[data-id="'+id+'"]');
-  // Use actual height; collapsed cards are much shorter
-  const ch=card ? card.offsetHeight : (S.collapsed[id] ? 52 : 115);
-  const cw=card ? card.offsetWidth  : 175;
-  const cx=p.x||0, cy=p.y||0;
-  if(port==='t') return{x:cx+cw/2, y:cy};
-  if(port==='b') return{x:cx+cw/2, y:cy+ch};
-  if(port==='l') return{x:cx,       y:cy+ch/2};
-  if(port==='r') return{x:cx+cw,    y:cy+ch/2};
-  return{x:cx+cw/2, y:cy+ch/2};
-}
-
 function renderConns(){
   const svg=document.getElementById('conn-svg');
   [...svg.querySelectorAll('path,text,rect,line,polyline')].forEach(el=>el.remove());
 
-  // ── Collect parent→children groups ─────────────────────────
-  // For padre connections, draw orthogonal tree lines:
-  // Each unique set of parents shares a horizontal "bus" bar,
-  // and all children of that group drop down from it.
+  const col_padre='#4A7C59', col_pareja='#C4972A', col_hermano='#3A6186';
 
-  // Build map: parentKey → {parents:[id], children:[id]}
-  // parentKey = sorted parent ids joined
-  const parentGroups = {}; // key → {parents, children}
-
-  // Also track which connections are padre vs pareja/hermano
-  const padreConns  = S.connections.filter(c=>c.type==='padre');
-  const lateralConns= S.connections.filter(c=>c.type!=='padre');
-
-  // Group children by their parent set
+  // Group padre connections by child's parent set
+  const padreConns=S.connections.filter(c=>c.type==='padre');
+  const lateralConns=S.connections.filter(c=>c.type!=='padre');
+  const parentGroups={};
   padreConns.forEach(c=>{
-    // find all parents of c.to
-    const childParents = padreConns
-      .filter(x=>x.to===c.to)
-      .map(x=>x.from)
-      .sort()
-      .join(',');
-    if(!parentGroups[childParents])
-      parentGroups[childParents]={parents:childParents.split(','), children:[]};
-    if(!parentGroups[childParents].children.includes(c.to))
-      parentGroups[childParents].children.push(c.to);
+    const childParents=padreConns.filter(x=>x.to===c.to).map(x=>x.from).sort().join(',');
+    if(!parentGroups[childParents])parentGroups[childParents]={parents:childParents.split(','),children:[]};
+    if(!parentGroups[childParents].children.includes(c.to))parentGroups[childParents].children.push(c.to);
   });
 
-  const col_padre  = '#4A7C59';
-  const col_pareja = '#C4972A';
-  const col_hermano= '#3A6186';
+  // Draw padre connections (orthogonal bus style)
+  Object.values(parentGroups).forEach(({parents,children})=>{
+    const vParents=parents.filter(id=>S.people[id]);
+    const vChildren=children.filter(id=>S.people[id]);
+    if(!vParents.length||!vChildren.length)return;
 
-  // ── Draw padre connections: orthogonal tree style ───────────
-  Object.values(parentGroups).forEach(({parents, children})=>{
-    if(!parents[0]||!children.length)return;
-    const validParents = parents.filter(id=>S.people[id]);
-    const validChildren= children.filter(id=>S.people[id]);
-    if(!validParents.length||!validChildren.length)return;
+    const parentPts=vParents.map(id=>portCanvasPos(id,'b'));
+    const childPts=vChildren.map(id=>portCanvasPos(id,'t'));
+    const parentBottomY=Math.max(...parentPts.map(p=>p.y));
+    const childTopY=Math.min(...childPts.map(p=>p.y));
+    const busY=parentBottomY+(childTopY-parentBottomY)*0.5;
+    const allX=[...parentPts.map(p=>p.x),...childPts.map(p=>p.x)];
+    const busX1=Math.min(...allX),busX2=Math.max(...allX);
 
-    // Parent exit points (bottom port)
-    const parentPts = validParents.map(id=>portCanvasPos(id,'b'));
-    // Child entry points (top port)
-    const childPts  = validChildren.map(id=>portCanvasPos(id,'t'));
-
-    // Midpoint Y between parents and children
-    const parentBottomY = Math.max(...parentPts.map(p=>p.y));
-    const childTopY     = Math.min(...childPts.map(p=>p.y));
-    const busY = parentBottomY + (childTopY - parentBottomY) * 0.5;
-
-    // Horizontal bus: from leftmost to rightmost point
-    const allX = [...parentPts.map(p=>p.x), ...childPts.map(p=>p.x)];
-    const busX1 = Math.min(...allX);
-    const busX2 = Math.max(...allX);
-
-    // Detect if this family has a secondary couple parent
-    // (any parent is a non-primary couple partner of someone)
-    const hasSecParent=validParents.some(pid=>{
-      return S.connections.some(c=>{
-        if(c.type!=='pareja') return false;
-        const otherSide=c.from===pid?c.to:c.from;
-        const theirCouples=S.connections.filter(x=>x.type==='pareja'&&(x.from===otherSide||x.to===otherSide));
-        return theirCouples.length>1 && theirCouples.indexOf(c)>0;
-      });
-    });
-
-    // Draw: each parent → vertical line down to bus (solid always)
-    validParents.forEach((id, i)=>{
-      const pt = parentPts[i];
-      const line = mkLine(pt.x, pt.y, pt.x, busY, col_padre, 2);
-      svg.appendChild(line);
-    });
-
-    // Draw horizontal bus bar
-    if(busX1 < busX2){
-      const bus = mkLine(busX1, busY, busX2, busY, col_padre, 2);
-      svg.appendChild(bus);
-    }
-
-    // Draw: each child → vertical line up from bus
-    // Children of secondary couples get dashed lines
-    validChildren.forEach((id, i)=>{
-      const pt = childPts[i];
-      const line = mkLine(pt.x, busY, pt.x, pt.y, col_padre, 2);
-      if(hasSecParent) line.setAttribute('stroke-dasharray','4 4');
-      svg.appendChild(line);
-
-    });
-
-
-
-    // "Padre/Madre" label on the bus midpoint
-    const lx=(busX1+busX2)/2, ly=busY;
-    svg.appendChild(mkLabel(lx, ly-7, 'Padre/Madre', col_padre));
-
-    // Clickable hit area along bus and verticals for each connection
-    // We store a hit rect over the whole bus area
-    const hitIdx = S.connections.findIndex(c=>
-      c.type==='padre' && validParents.includes(c.from) && validChildren.includes(c.to)
+    // Detect secondary couple parent
+    const hasSecParent=vParents.some(pid=>
+      S.connections.some(c=>{
+        if(c.type!=='pareja')return false;
+        const other=c.from===pid?c.to:c.from;
+        const cc=S.connections.filter(x=>x.type==='pareja'&&(x.from===other||x.to===other));
+        return cc.length>1&&cc.indexOf(c)>0;
+      })
     );
+
+    vParents.forEach((id,i)=>{const pt=parentPts[i];svg.appendChild(mkLine(pt.x,pt.y,pt.x,busY,col_padre,2));});
+    if(busX1<busX2)svg.appendChild(mkLine(busX1,busY,busX2,busY,col_padre,2));
+    vChildren.forEach((id,i)=>{
+      const pt=childPts[i];
+      const line=mkLine(pt.x,busY,pt.x,pt.y,col_padre,2);
+      if(hasSecParent)line.setAttribute('stroke-dasharray','4 4');
+      svg.appendChild(line);
+    });
+    svg.appendChild(mkLabel((busX1+busX2)/2,busY-7,t('relPadreMadre'),col_padre));
+
+    // Clickable hit on bus
+    const hitIdx=S.connections.findIndex(c=>c.type==='padre'&&vParents.includes(c.from)&&vChildren.includes(c.to));
     if(hitIdx>=0){
-      const hit = document.createElementNS('http://www.w3.org/2000/svg','rect');
-      hit.setAttribute('x',busX1-8); hit.setAttribute('y',busY-8);
-      hit.setAttribute('width',Math.max(busX2-busX1+16,16));
-      hit.setAttribute('height',16);
-      hit.setAttribute('fill','transparent'); hit.setAttribute('cursor','pointer');
-      hit.setAttribute('pointer-events','all');
-      hit.dataset.connIdx=hitIdx;
-      hit.addEventListener('click',onConnClick);
-      svg.appendChild(hit);
+      const hit=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      hit.setAttribute('x',busX1-8);hit.setAttribute('y',busY-8);
+      hit.setAttribute('width',Math.max(busX2-busX1+16,16));hit.setAttribute('height',16);
+      hit.setAttribute('fill','transparent');hit.setAttribute('cursor','pointer');
+      hit.setAttribute('pointer-events','all');hit.dataset.connIdx=hitIdx;
+      hit.addEventListener('click',onConnClick);svg.appendChild(hit);
     }
   });
 
-  // ── Draw lateral connections ──
+  // Draw lateral connections (pareja, hermano)
   lateralConns.forEach((conn,_)=>{
-    const i = S.connections.indexOf(conn);
-    const a=S.people[conn.from], b=S.people[conn.to];
-    if(!a||!b)return;
-
-    // Couple index for this connection
-    let coupleIdx=0, isSecCouple=false, latLabel='';
+    const i=S.connections.indexOf(conn);
+    const a=S.people[conn.from],b=S.people[conn.to];if(!a||!b)return;
+    let coupleIdx=0,isSecCouple=false,latLabel='';
     if(conn.type==='pareja'){
-      const pConnsFrom=S.connections.filter(c=>c.type==='pareja'&&(c.from===conn.from||c.to===conn.from));
-      coupleIdx=pConnsFrom.indexOf(conn);
-      isSecCouple=coupleIdx>0;
+      const pConns=S.connections.filter(c=>c.type==='pareja'&&(c.from===conn.from||c.to===conn.from));
+      coupleIdx=pConns.indexOf(conn);isSecCouple=coupleIdx>0;
       latLabel=coupleIdx===0?t('relPareja'):t('relPareja')+' '+(coupleIdx+1);
-    } else {
-      latLabel=t('relHermano');
-    }
-
-    const col_line = conn.type==='pareja'?col_pareja:col_hermano;
-    // pareja 1: long dash; pareja 2+: short dots, thinner, offset; hermano: medium dash
-    const dash  = conn.type==='hermano'?'5 4': isSecCouple?'3 5':'9 4';
-    const lw    = isSecCouple?1.5:2.5;
-
-    const acx=(a.x||0)+87.5, bcx=(b.x||0)+87.5;
-    const ap = acx<=bcx?'r':'l';
-    const bp = acx<=bcx?'l':'r';
-    const fp = portCanvasPos(conn.from, ap);
-    const tp = portCanvasPos(conn.to,   bp);
-
-    // Route secondary couples below primary: offset by coupleIdx * 16px
-    const yOff = isSecCouple ? 16*coupleIdx : 0;
-    const fy=fp.y+yOff, ty=tp.y+yOff;
-
+    }else{latLabel=t('relHermano');}
+    const col=conn.type==='pareja'?col_pareja:col_hermano;
+    const dash=conn.type==='hermano'?'5 4':isSecCouple?'3 5':'9 4';
+    const lw=isSecCouple?1.5:2.5;
+    const acx=(a.x||0)+87.5,bcx=(b.x||0)+87.5;
+    const ap=acx<=bcx?'r':'l',bp=acx<=bcx?'l':'r';
+    const fp=portCanvasPos(conn.from,ap),tp=portCanvasPos(conn.to,bp);
+    const yOff=isSecCouple?16*coupleIdx:0;
+    const fy=fp.y+yOff,ty2=tp.y+yOff;
     let d;
-    if(yOff===0 && Math.abs(fy-ty)<3){
-      d=`M${fp.x},${fy} L${tp.x},${ty}`;
-    } else if(yOff>0){
-      d=`M${fp.x},${fp.y} L${fp.x},${fy} L${tp.x},${ty} L${tp.x},${tp.y}`;
-    } else {
-      const midX=(fp.x+tp.x)/2;
-      d=`M${fp.x},${fy} L${midX},${fy} L${midX},${ty} L${tp.x},${ty}`;
-    }
-
-    // Hit area
+    if(yOff===0&&Math.abs(fy-ty2)<3)d=`M${fp.x},${fy} L${tp.x},${ty2}`;
+    else if(yOff>0)d=`M${fp.x},${fp.y} L${fp.x},${fy} L${tp.x},${ty2} L${tp.x},${tp.y}`;
+    else{const midX=(fp.x+tp.x)/2;d=`M${fp.x},${fy} L${midX},${fy} L${midX},${ty2} L${tp.x},${ty2}`;}
     const hit=document.createElementNS('http://www.w3.org/2000/svg','path');
-    hit.setAttribute('d',d);hit.setAttribute('stroke','transparent');
-    hit.setAttribute('stroke-width','14');hit.setAttribute('fill','none');
-    hit.setAttribute('cursor','pointer');hit.setAttribute('pointer-events','stroke');
-    hit.dataset.connIdx=i;
-    hit.addEventListener('click',onConnClick);
-    svg.appendChild(hit);
-
-    // Visible line
+    hit.setAttribute('d',d);hit.setAttribute('stroke','transparent');hit.setAttribute('stroke-width','14');
+    hit.setAttribute('fill','none');hit.setAttribute('cursor','pointer');hit.setAttribute('pointer-events','stroke');
+    hit.dataset.connIdx=i;hit.addEventListener('click',onConnClick);svg.appendChild(hit);
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
-    path.setAttribute('d',d);path.setAttribute('stroke',col_line);
-    path.setAttribute('stroke-width',String(lw));path.setAttribute('fill','none');
-    path.setAttribute('stroke-dasharray',dash);
-    path.setAttribute('pointer-events','none');
-    if(isSecCouple) path.setAttribute('opacity','0.75');
+    path.setAttribute('d',d);path.setAttribute('stroke',col);path.setAttribute('stroke-width',String(lw));
+    path.setAttribute('fill','none');path.setAttribute('stroke-dasharray',dash);
+    path.setAttribute('pointer-events','none');if(isSecCouple)path.setAttribute('opacity','0.75');
     svg.appendChild(path);
-
-    const lx=(fp.x+tp.x)/2, ly=Math.min(fp.y,tp.y)+(yOff>0?yOff:0)-8;
-    svg.appendChild(mkLabel(lx, ly, latLabel, col_line));
+    const lx=(fp.x+tp.x)/2,ly=Math.min(fp.y,tp.y)+(yOff>0?yOff:0)-8;
+    svg.appendChild(mkLabel(lx,ly,latLabel,col));
   });
+}
 
-
-// ── SVG helpers ─────────────────────────────────────────────
 function mkLine(x1,y1,x2,y2,col,w){
   const l=document.createElementNS('http://www.w3.org/2000/svg','line');
-  l.setAttribute('x1',x1);l.setAttribute('y1',y1);
-  l.setAttribute('x2',x2);l.setAttribute('y2',y2);
-  l.setAttribute('stroke',col);l.setAttribute('stroke-width',w);
-  l.setAttribute('pointer-events','none');
+  l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2);
+  l.setAttribute('stroke',col);l.setAttribute('stroke-width',w);l.setAttribute('pointer-events','none');
   return l;
 }
 function mkLabel(x,y,text,col){
-  const t=document.createElementNS('http://www.w3.org/2000/svg','text');
-  t.setAttribute('x',x);t.setAttribute('y',y);
-  t.setAttribute('text-anchor','middle');t.setAttribute('font-size','9');
-  t.setAttribute('fill',col);t.setAttribute('font-family','Lato,sans-serif');
-  t.setAttribute('font-weight','700');t.setAttribute('pointer-events','none');
-  t.setAttribute('paint-order','stroke');
-  t.setAttribute('stroke','var(--cream)');t.setAttribute('stroke-width','3');
-  t.setAttribute('stroke-linejoin','round');
-  t.textContent=text;
-  return t;
+  const t2=document.createElementNS('http://www.w3.org/2000/svg','text');
+  t2.setAttribute('x',x);t2.setAttribute('y',y);t2.setAttribute('text-anchor','middle');
+  t2.setAttribute('font-size','9');t2.setAttribute('fill',col);t2.setAttribute('font-family','Lato,sans-serif');
+  t2.setAttribute('font-weight','700');t2.setAttribute('pointer-events','none');
+  t2.setAttribute('paint-order','stroke');t2.setAttribute('stroke','var(--cream)');
+  t2.setAttribute('stroke-width','3');t2.setAttribute('stroke-linejoin','round');
+  t2.textContent=text;return t2;
 }
+
+
+
+
 
 function onConnClick(e){
   e.stopPropagation();
@@ -1003,7 +826,9 @@ function onConnClick(e){
   }else{reorderWrap.innerHTML='';reorderWrap.style.display='none';S._reorderPersonId=null;}
   document.getElementById('conn-action-modal').classList.add('open');
 }
+
 function connActionCancel(){document.getElementById('conn-action-modal').classList.remove('open');S.actionConnIdx=null;}
+
 function connActionSave(){
   const i=S.actionConnIdx;if(i===null)return;
   const conn=S.connections[i];
@@ -1030,6 +855,7 @@ function connActionSave(){
   connActionCancel();
   toast(t('linkCreated'));
 }
+
 function connActionDelete(){
   const i=S.actionConnIdx;if(i===null)return;
   connActionCancel();
@@ -1046,6 +872,7 @@ function toggleCollapse(id){
   S.collapsed[id]=!S.collapsed[id];
   persist();buildCard(id);renderConns();
 }
+
 function toggleCollapseAll(){
   var ids=Object.keys(S.people);
   var anyExpanded=ids.some(function(id){return !S.collapsed[id];});
@@ -1053,6 +880,304 @@ function toggleCollapseAll(){
   var btn=document.getElementById('btn-collapse-all');
   if(btn)btn.textContent=anyExpanded?'▶ Expandir':'▼ Contraer';
   persist();renderAll();renderConns();
+}
+
+function selectCard(id){
+  S.selectedId=id;
+  S.selectedIds.clear(); if(id) S.selectedIds.add(id);
+  document.querySelectorAll('.card').forEach(function(c){
+    c.classList.toggle('selected', c.dataset.id===id||S.selectedIds.has(c.dataset.id));
+  });
+}
+
+function closePanel(){
+  document.getElementById('panel').style.display='none';
+  S.panelMode=null; S.editingId=null; S.photoData=null;
+}
+
+function openAddPanel(){
+  S.panelMode='add'; S.editingId=null; S.photoData=null;
+  showPanel(t('newPerson'), formHTML(null));
+  bindRadio(); bindFormKeys();
+}
+
+function openEditPanel(id){
+  S.panelMode='edit'; S.editingId=id;
+  S.photoData=(S.people[id]&&S.people[id].photo)||null;
+  selectCard(id);
+  showPanel(t('editPerson'), formHTML(S.people[id]));
+  bindRadio(); bindFormKeys();
+}
+
+function bindFormKeys(){
+  document.getElementById('panel').querySelectorAll('input[type=text]').forEach(function(inp){
+    inp.addEventListener('keydown',function(e){
+      if(e.key==='Enter'){e.preventDefault();savePerson();}
+    });
+  });
+  var ni=document.getElementById('f-firstname');
+  if(ni){ni.focus();ni.select();}
+}
+
+function openDetailPanel(id){
+  if(!S.people[id]) return;
+  selectCard(id);
+  var p=S.people[id];
+  var conns=S.connections.filter(function(c){return c.from===id||c.to===id;}).map(function(c){
+    var oid=c.from===id?c.to:c.from;
+    var o=S.people[oid]; if(!o) return null;
+    var lbl;
+    if(c.type==='pareja')       lbl=t('relPareja');
+    else if(c.type==='hermano') lbl=t('relHermano');
+    else if(c.type==='padre')   lbl=c.from===id?t('relPadreMadre'):t('relHijo');
+    return{c:c,o:o,oid:oid,lbl:lbl};
+  }).filter(Boolean);
+
+  var av=p.photo
+    ?('<img src="'+p.photo+'" alt="">')
+    :('<span style="font-family:\'Playfair Display\',serif;font-size:17px;font-weight:700;color:#fff;letter-spacing:-0.5px">'+cardInitials(p)+'</span>');
+
+  var linksHtml=conns.map(function(item){
+    return '<li>'
+      +'<div style="display:flex;align-items:center;gap:7px">'
+      +'<div class="mav '+gc(item.o.gender)+'">'+(item.o.photo?'<img src="'+item.o.photo+'" alt="">':cardInitials(item.o))+'</div>'
+      +'<div><div style="font-weight:700;font-size:12px">'+esc(fullName(item.o))+'</div>'
+      +'<div style="font-size:10px;color:var(--text2)">'+item.lbl+'</div></div>'
+      +'</div>'
+      +'<button class="rx" onclick="removeConn(\''+item.c.from+'\',\''+item.c.to+'\',\''+id+'\')">✕</button>'
+      +'</li>';
+  }).join('');
+
+  var body=''
+    +'<div class="dav-area">'
+      +'<div class="dav">'+av+'</div>'
+      +'<div class="dname">'+esc(fullName(p))+'</div>'
+      +'<div class="dsub">'+esc(p.role||({masculino:'👨',femenino:'👩',otro:'🧑'}[p.gender]||'🧑'))+'</div>'
+    +'</div>'
+    +'<div class="dbody">'
+      +(p.birth?'<div class="drow"><span class="dlabel">'+t('birth')+'</span><span class="dval">'+p.birth+(p.birthplace?' · '+esc(p.birthplace):'')+'</span></div>':'')
+      +(p.death?'<div class="drow"><span class="dlabel">'+t('death')+'</span><span class="dval">'+p.death+'</span></div>':'')
+      +(p.bio?'<div class="divider"></div><p class="dbio">'+esc(p.bio)+'</p>':'')
+      +'<div class="divider"></div>'
+      +'<div class="hint-box">💡 '+t('hintLink')+'<br>'+t('hintPan')+'</div>'
+      +'<div style="font-weight:700;font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">'+t('links')+' ('+conns.length+')</div>'
+      +'<ul class="clist">'+linksHtml+'</ul>'
+      +'<div class="divider"></div>'
+      +'<button class="btn btn-gold btn-full" onclick="openEditPanel(\''+id+'\')">'+t('editBtn')+'</button>'
+      +'<button class="btn btn-red btn-full" onclick="askDelete(\''+id+'\')">'+t('deleteBtn')+'</button>'
+    +'</div>';
+
+  showPanel(t('profile'), body, true);
+}
+
+function askDelete(id){
+  S.deletingId=id; S.deletingConn=null; S._bulkDeleteIds=null;
+  document.getElementById('del-title').textContent=t('deletePerson');
+  document.getElementById('del-name').textContent=fullName(S.people[id])||'?';
+  document.getElementById('del-sub').style.display='block';
+  document.getElementById('del-sub').textContent=t('deleteAlsoLinks');
+  document.getElementById('del-modal').classList.add('open');
+}
+
+function cancelDel(){
+  document.getElementById('del-modal').classList.remove('open');
+  S.deletingId=null; S.deletingConn=null; S._bulkDeleteIds=null;
+}
+
+function confirmDel(){
+  document.getElementById('del-modal').classList.remove('open');
+  if(S._bulkDeleteIds){
+    var bids=S._bulkDeleteIds; S._bulkDeleteIds=null;
+    bids.forEach(function(id){
+      delete S.people[id];
+      S.connections=S.connections.filter(function(c){return c.from!==id&&c.to!==id;});
+      var card=document.querySelector('[data-id="'+id+'"]');
+      if(card) card.remove();
+    });
+    S.selectedIds.clear(); S.selectedId=null;
+    renderConns(); persist(); closePanel();
+    if(!Object.keys(S.people).length) document.getElementById('empty').style.display='block';
+    toast(bids.length+' '+t('bulkDelete'));
+    return;
+  }
+  if(S.deletingConn!==null){
+    S.connections.splice(S.deletingConn,1);
+    S.deletingConn=null;
+    renderConns(); persist(); toast(t('linkDeleted')); return;
+  }
+  var id=S.deletingId; if(!id) return;
+  delete S.people[id];
+  S.connections=S.connections.filter(function(c){return c.from!==id&&c.to!==id;});
+  var card=document.querySelector('[data-id="'+id+'"]');
+  if(card) card.remove();
+  renderConns(); persist();
+  S.deletingId=null;
+  if(S.selectedId===id){ closePanel(); S.selectedId=null; }
+  if(!Object.keys(S.people).length) document.getElementById('empty').style.display='block';
+  toast(t('personDeleted'));
+}
+
+function removeConn(from,to,reopen){
+  S.connections=S.connections.filter(function(c){
+    return !((c.from===from&&c.to===to)||(c.from===to&&c.to===from));
+  });
+  renderConns(); persist();
+  if(reopen) openDetailPanel(reopen);
+  toast(t('linkDeleted'));
+}
+
+function openRelModal(fromId,toId){
+  S.relFrom=fromId; S.relTo=toId;
+  var a=fullName(S.people[fromId])||'?', b=fullName(S.people[toId])||'?';
+  var dup=S.connections.some(function(c){
+    return (c.from===fromId&&c.to===toId)||(c.from===toId&&c.to===fromId);
+  });
+  if(dup){ toast(t('dupLink')); S.relFrom=null; S.relTo=null; return; }
+  var port=S.wiringFromPort||'';
+  var preType=port==='t'?'hijo':port==='b'?'padre':'pareja';
+  document.getElementById('rel-modal-title').textContent=t('linkType');
+  document.getElementById('rel-modal-sub').textContent=a+' ↔ '+b;
+  document.getElementById('rel-type').innerHTML=
+    '<option value="padre"'+(preType==='padre'?' selected':'')+'>'+(t('padre'))+' "'+b+'"</option>'+
+    '<option value="hijo"'+(preType==='hijo'?' selected':'')+'>'+(t('hijo'))+' "'+a+'"</option>'+
+    '<option value="pareja"'+(preType==='pareja'?' selected':'')+'>'+t('couple')+'</option>'+
+    '<option value="hermano">'+t('sibling')+'</option>';
+  document.getElementById('rel-modal').classList.add('open');
+}
+
+function cancelRel(){
+  document.getElementById('rel-modal').classList.remove('open');
+  S.relFrom=null; S.relTo=null;
+}
+
+function confirmRel(){
+  var from=S.relFrom, to=S.relTo;
+  var type=document.getElementById('rel-type').value;
+  if(type==='hijo'){ var tmp=from; from=to; to=tmp; type='padre'; }
+  S.connections.push({from:from,to:to,type:type});
+  renderConns(); persist();
+  document.getElementById('rel-modal').classList.remove('open');
+  openDetailPanel(S.relFrom||from);
+  S.relFrom=null; S.relTo=null; S.wiringFromPort=null;
+  toast(t('linkCreated'));
+}
+
+function askDeleteMultiple(ids){
+  S._bulkDeleteIds=ids;
+  document.getElementById('del-title').textContent=t('deletePerson');
+  document.getElementById('del-name').textContent=ids.length+' '+t('bulkDelete');
+  document.getElementById('del-sub').style.display='none';
+  document.getElementById('del-modal').classList.add('open');
+}
+
+function showPanel(title,body,noPad=false){
+  const panel=document.getElementById('panel');
+  panel.style.display='flex';
+  panel.innerHTML=`<div class="ph">${title}<button class="phx" onclick="closePanel()">×</button></div><div class="pb" style="${noPad?'padding:0':''}">${body}</div>`;
+}
+
+function formHTML(p){
+  p=p||{};
+  var photoHtml=p.photo
+    ?`<div style="text-align:center;margin-bottom:7px"><img src="${p.photo}" id="photo-prev" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid var(--gold)"></div><div class="pu-area" onclick="document.getElementById('photo-file').click()">${t('photoChange')}</div>`
+    :`<div class="pu-area" onclick="document.getElementById('photo-file').click()">${t('photoUpload')}</div><div id="pp-wrap" style="display:none;text-align:center;margin-top:7px"><img id="photo-prev" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid var(--gold)"></div>`;
+  return `
+    <div class="fg">${photoHtml}</div>
+    <div class="fg"><label>${t('firstName')}</label><input type="text" id="f-firstname" value="${esc(p.firstName||p.name||'')}" placeholder="Juan"></div>
+    <div class="fg"><label>${t('middleName')}</label><input type="text" id="f-middlename" value="${esc(p.middleName||'')}" placeholder="Carlos"></div>
+    <div class="fg"><label>${t('lastName')}</label><input type="text" id="f-lastname" value="${esc(p.lastName||'')}" placeholder="García López"></div>
+    <div class="fg"><label>${t('gender')}</label><div class="rg">
+      <div class="ro male ${(!p.gender||p.gender==='masculino')?'sel':''}" data-g="masculino">${t('male')}</div>
+      <div class="ro female ${p.gender==='femenino'?'sel':''}" data-g="femenino">${t('female')}</div>
+      <div class="ro neutral ${p.gender==='otro'?'sel':''}" data-g="otro">${t('other')}</div>
+    </div></div>
+    <div class="fg"><label>${t('role')}</label><input type="text" id="f-role" value="${esc(p.role||'')}" placeholder="${t('rolePlaceholder')}"></div>
+    <div class="fg"><label>${t('birthYear')}</label><input type="text" id="f-birth" value="${p.birth||''}" placeholder="1945"></div>
+    <div class="fg"><label>${t('deathYear')}</label><input type="text" id="f-death" value="${p.death||''}" placeholder="2010"></div>
+    <div class="fg"><label>${t('birthplace')}</label><input type="text" id="f-birthplace" value="${esc(p.birthplace||'')}" placeholder="${t('birthPlaceholder')}"></div>
+    <div class="fg"><label>${t('notes')}</label><textarea id="f-bio" placeholder="${t('notesPlaceholder')}">${esc(p.bio||'')}</textarea></div>
+    <div style="display:flex;gap:7px;margin-top:4px">
+      <button class="btn btn-gold" style="flex:1" onclick="savePerson()">${t('save')}</button>
+      <button class="btn btn-ghost" style="color:var(--text2);border-color:#ccc" onclick="closePanel()">${t('cancel')}</button>
+    </div>`;
+}
+
+function bindRadio(){
+  document.querySelectorAll('.ro[data-g]').forEach(el=>{
+    el.addEventListener('click',function(){
+      document.querySelectorAll('.ro[data-g]').forEach(e=>e.classList.remove('sel'));
+      this.classList.add('sel');
+    });
+  });
+}
+
+function handlePhoto(e){
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    S.photoData=ev.target.result;
+    const prev=document.getElementById('photo-prev');
+    const wrap=document.getElementById('pp-wrap');
+    if(prev){prev.src=S.photoData;prev.style.display='block';}
+    if(wrap)wrap.style.display='block';
+  };
+  r.readAsDataURL(f);e.target.value='';
+}
+
+function savePerson(){
+  const firstName=(document.getElementById('f-firstname').value||'').trim();
+  const middleName=(document.getElementById('f-middlename').value||'').trim();
+  const lastName=(document.getElementById('f-lastname').value||'').trim();
+  if(!firstName&&!lastName){toast(t('nameRequired'));return;}
+  const gender=(document.querySelector('.ro.sel[data-g]')||{}).dataset?.g||'masculino';
+  const data={
+    firstName,middleName,lastName,
+    name:[firstName,middleName,lastName].filter(Boolean).join(' '),
+    gender,
+    role:(document.getElementById('f-role').value||'').trim(),
+    birth:(document.getElementById('f-birth').value||'').trim(),
+    death:(document.getElementById('f-death').value||'').trim(),
+    birthplace:(document.getElementById('f-birthplace').value||'').trim(),
+    bio:(document.getElementById('f-bio').value||'').trim(),
+    photo:S.photoData||null,
+  };
+  if(S.panelMode==='edit'&&S.editingId){
+    Object.assign(S.people[S.editingId],data);
+    buildCard(S.editingId);renderConns();
+    toast(t('personUpdated'));
+  }else{
+    const id=uid();
+    const ids=Object.keys(S.people),cols=Math.max(1,Math.ceil(Math.sqrt(ids.length+1)));
+    data.x=(ids.length%cols)*250+80;data.y=Math.floor(ids.length/cols)*200+80;
+    S.people[id]=data;buildCard(id);
+    document.getElementById('empty').style.display='none';
+    renderConns();toast(t('personAdded'));
+  }
+  persist();closePanel();
+}
+
+function exportData(){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify({people:S.people,connections:S.connections,nextId:S.nextId,collapsed:S.collapsed},null,2)],{type:'application/json'}));
+  a.download='arbol-genealogico.json';a.click();toast(t('exported'));
+}
+
+function handleImport(e){
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{
+      const d=JSON.parse(ev.target.result);
+      S.people=d.people||{};S.connections=d.connections||[];S.nextId=d.nextId||1;S.collapsed=d.collapsed||{};
+      persist();renderAll();fitScreen();toast(t('imported'));
+    }catch{toast(t('importError'));}
+  };
+  r.readAsText(f);e.target.value='';
+}
+
+function toast(msg){
+  const t2=document.getElementById('toast');t2.textContent=msg;t2.classList.add('show');
+  clearTimeout(t2._t);t2._t=setTimeout(()=>t2.classList.remove('show'),2600);
 }
 
 function autoLayout(){
@@ -1389,398 +1514,113 @@ function autoLayout(){
   renderAll(); persist(); toast(t('organized'));
 }
 
-/* ══════════════════════════════════════
-   SELECT
-══════════════════════════════════════ */
-function selectCard(id){
-  S.selectedId=id;
-  S.selectedIds.clear(); if(id) S.selectedIds.add(id);
-  document.querySelectorAll('.card').forEach(function(c){
-    c.classList.toggle('selected', c.dataset.id===id||S.selectedIds.has(c.dataset.id));
-  });
-}
 
 /* ══════════════════════════════════════
-   PANELS
+   CANVAS EVENTS
 ══════════════════════════════════════ */
-function closePanel(){
-  document.getElementById('panel').style.display='none';
-  S.panelMode=null; S.editingId=null; S.photoData=null;
-}
-function openAddPanel(){
-  S.panelMode='add'; S.editingId=null; S.photoData=null;
-  showPanel(t('newPerson'), formHTML(null));
-  bindRadio(); bindFormKeys();
-}
-function openEditPanel(id){
-  S.panelMode='edit'; S.editingId=id;
-  S.photoData=(S.people[id]&&S.people[id].photo)||null;
-  selectCard(id);
-  showPanel(t('editPerson'), formHTML(S.people[id]));
-  bindRadio(); bindFormKeys();
-}
-function bindFormKeys(){
-  document.getElementById('panel').querySelectorAll('input[type=text]').forEach(function(inp){
-    inp.addEventListener('keydown',function(e){
-      if(e.key==='Enter'){e.preventDefault();savePerson();}
-    });
-  });
-  var ni=document.getElementById('f-firstname');
-  if(ni){ni.focus();ni.select();}
-}
-
-function openDetailPanel(id){
-  if(!S.people[id]) return;
-  selectCard(id);
-  var p=S.people[id];
-  var conns=S.connections.filter(function(c){return c.from===id||c.to===id;}).map(function(c){
-    var oid=c.from===id?c.to:c.from;
-    var o=S.people[oid]; if(!o) return null;
-    var lbl;
-    if(c.type==='pareja')       lbl=t('relPareja');
-    else if(c.type==='hermano') lbl=t('relHermano');
-    else if(c.type==='padre')   lbl=c.from===id?t('relPadreMadre'):t('relHijo');
-    return{c:c,o:o,oid:oid,lbl:lbl};
-  }).filter(Boolean);
-
-  var av=p.photo
-    ?('<img src="'+p.photo+'" alt="">')
-    :('<span style="font-family:\'Playfair Display\',serif;font-size:17px;font-weight:700;color:#fff;letter-spacing:-0.5px">'+cardInitials(p)+'</span>');
-
-  var linksHtml=conns.map(function(item){
-    return '<li>'
-      +'<div style="display:flex;align-items:center;gap:7px">'
-      +'<div class="mav '+gc(item.o.gender)+'">'+(item.o.photo?'<img src="'+item.o.photo+'" alt="">':cardInitials(item.o))+'</div>'
-      +'<div><div style="font-weight:700;font-size:12px">'+esc(fullName(item.o))+'</div>'
-      +'<div style="font-size:10px;color:var(--text2)">'+item.lbl+'</div></div>'
-      +'</div>'
-      +'<button class="rx" onclick="removeConn(\''+item.c.from+'\',\''+item.c.to+'\',\''+id+'\')">✕</button>'
-      +'</li>';
-  }).join('');
-
-  var body=''
-    +'<div class="dav-area">'
-      +'<div class="dav">'+av+'</div>'
-      +'<div class="dname">'+esc(fullName(p))+'</div>'
-      +'<div class="dsub">'+esc(p.role||({masculino:'👨',femenino:'👩',otro:'🧑'}[p.gender]||'🧑'))+'</div>'
-    +'</div>'
-    +'<div class="dbody">'
-      +(p.birth?'<div class="drow"><span class="dlabel">'+t('birth')+'</span><span class="dval">'+p.birth+(p.birthplace?' · '+esc(p.birthplace):'')+'</span></div>':'')
-      +(p.death?'<div class="drow"><span class="dlabel">'+t('death')+'</span><span class="dval">'+p.death+'</span></div>':'')
-      +(p.bio?'<div class="divider"></div><p class="dbio">'+esc(p.bio)+'</p>':'')
-      +'<div class="divider"></div>'
-      +'<div class="hint-box">💡 '+t('hintLink')+'<br>'+t('hintPan')+'</div>'
-      +'<div style="font-weight:700;font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">'+t('links')+' ('+conns.length+')</div>'
-      +'<ul class="clist">'+linksHtml+'</ul>'
-      +'<div class="divider"></div>'
-      +'<button class="btn btn-gold btn-full" onclick="openEditPanel(\''+id+'\')">'+t('editBtn')+'</button>'
-      +'<button class="btn btn-red btn-full" onclick="askDelete(\''+id+'\')">'+t('deleteBtn')+'</button>'
-    +'</div>';
-
-  showPanel(t('profile'), body, true);
-}
-
-/* ══════════════════════════════════════
-   DELETE
-══════════════════════════════════════ */
-function askDelete(id){
-  S.deletingId=id; S.deletingConn=null; S._bulkDeleteIds=null;
-  document.getElementById('del-title').textContent=t('deletePerson');
-  document.getElementById('del-name').textContent=fullName(S.people[id])||'?';
-  document.getElementById('del-sub').style.display='block';
-  document.getElementById('del-sub').textContent=t('deleteAlsoLinks');
-  document.getElementById('del-modal').classList.add('open');
-}
-function cancelDel(){
-  document.getElementById('del-modal').classList.remove('open');
-  S.deletingId=null; S.deletingConn=null; S._bulkDeleteIds=null;
-}
-function confirmDel(){
-  document.getElementById('del-modal').classList.remove('open');
-  if(S._bulkDeleteIds){
-    var bids=S._bulkDeleteIds; S._bulkDeleteIds=null;
-    bids.forEach(function(id){
-      delete S.people[id];
-      S.connections=S.connections.filter(function(c){return c.from!==id&&c.to!==id;});
-      var card=document.querySelector('[data-id="'+id+'"]');
-      if(card) card.remove();
-    });
-    S.selectedIds.clear(); S.selectedId=null;
-    renderConns(); persist(); closePanel();
-    if(!Object.keys(S.people).length) document.getElementById('empty').style.display='block';
-    toast(bids.length+' '+t('bulkDelete'));
+cwEl.addEventListener('mousedown',e=>{
+  if(e.button===1){e.preventDefault();S.panning=true;S.panStart={x:e.clientX-S.panX,y:e.clientY-S.panY};cwEl.classList.add('panning');document.body.classList.add('no-select');return;}
+  if(e.button===0){
+    if(e.target.closest('.card')||e.target.closest('.port'))return;
+    if(S.wiringFrom)return;
+    e.preventDefault();document.body.classList.add('no-select');
+    const r=cwEl.getBoundingClientRect();const sx=e.clientX-r.left,sy=e.clientY-r.top;
+    S.marquee={x0:sx,y0:sy,x1:sx,y1:sy};
+    const m=document.getElementById('marquee');m.style.display='block';m.style.left=sx+'px';m.style.top=sy+'px';m.style.width='0';m.style.height='0';
+    cwEl.classList.add('marquee-mode');
+  }
+});
+window.addEventListener('mousemove',e=>{
+  if(S.draggingCard){
+    const p=S.people[S.draggingCard];
+    const nx=(e.clientX-S.panX)/S.zoom-S.dragOffset.x,ny=(e.clientY-S.panY)/S.zoom-S.dragOffset.y;
+    const ddx=nx-(p.x||0),ddy=ny-(p.y||0);
+    if(Math.abs(ddx)>2||Math.abs(ddy)>2)S.didDrag=true;
+    const moveIds=(S.selectedIds.size>1&&S.selectedIds.has(S.draggingCard))?[...S.selectedIds]:[S.draggingCard];
+    moveIds.forEach(id=>{const pp=S.people[id];if(!pp)return;if(id===S.draggingCard){pp.x=nx;pp.y=ny;}else{pp.x=(pp.x||0)+ddx;pp.y=(pp.y||0)+ddy;}const c=document.querySelector('[data-id="'+id+'"]');if(c){c.style.left=pp.x+'px';c.style.top=pp.y+'px';}});
+    renderConns();return;
+  }
+  if(S.wiringFrom){
+    const _r=cwEl.getBoundingClientRect();S.wireMouseX=e.clientX-_r.left;S.wireMouseY=e.clientY-_r.top;
+    const target=findCardUnderMouse(S.wireMouseX,S.wireMouseY);
+    document.querySelectorAll('.card').forEach(c=>c.classList.toggle('drop-target',c.dataset.id===target&&target!==S.wiringFrom.id));
+    S.wiringTo=target&&target!==S.wiringFrom.id?target:null;drawWire();return;
+  }
+  if(S.marquee){
+    const r=cwEl.getBoundingClientRect();S.marquee.x1=e.clientX-r.left;S.marquee.y1=e.clientY-r.top;
+    const mx=Math.min(S.marquee.x0,S.marquee.x1),my=Math.min(S.marquee.y0,S.marquee.y1);
+    const mw=Math.abs(S.marquee.x1-S.marquee.x0),mh=Math.abs(S.marquee.y1-S.marquee.y0);
+    const m=document.getElementById('marquee');m.style.left=mx+'px';m.style.top=my+'px';m.style.width=mw+'px';m.style.height=mh+'px';
+    const cx0=(mx-S.panX)/S.zoom,cy0=(my-S.panY)/S.zoom,cx1=(mx+mw-S.panX)/S.zoom,cy1=(my+mh-S.panY)/S.zoom;
+    document.querySelectorAll('.card').forEach(c=>{const p=S.people[c.dataset.id];if(!p)return;const inside=p.x+175>cx0&&p.x<cx1&&p.y+110>cy0&&p.y<cy1;if(inside){c.classList.add('in-selection');c.classList.remove('selected');}else c.classList.remove('in-selection');});
     return;
   }
-  if(S.deletingConn!==null){
-    S.connections.splice(S.deletingConn,1);
-    S.deletingConn=null;
-    renderConns(); persist(); toast(t('linkDeleted')); return;
+  if(S.panning){S.panX=e.clientX-S.panStart.x;S.panY=e.clientY-S.panStart.y;applyTransform();}
+});
+window.addEventListener('mouseup',e=>{
+  if(S.draggingCard){persist();S.draggingCard=null;S.dragOffset=null;}
+  if(S.wiringFrom){
+    document.body.classList.remove('wiring');
+    document.querySelectorAll('.card').forEach(c=>c.classList.remove('drop-target'));
+    document.getElementById('wire-svg').innerHTML='';
+    const _toId=S.wiringTo,_fromId=S.wiringFrom.id;S.wiringFrom=null;S.wiringTo=null;
+    if(_toId)openRelModal(_fromId,_toId);else S.wiringFromPort=null;
   }
-  var id=S.deletingId; if(!id) return;
-  delete S.people[id];
-  S.connections=S.connections.filter(function(c){return c.from!==id&&c.to!==id;});
-  var card=document.querySelector('[data-id="'+id+'"]');
-  if(card) card.remove();
-  renderConns(); persist();
-  S.deletingId=null;
-  if(S.selectedId===id){ closePanel(); S.selectedId=null; }
-  if(!Object.keys(S.people).length) document.getElementById('empty').style.display='block';
-  toast(t('personDeleted'));
-}
-
-/* ══════════════════════════════════════
-   REMOVE CONNECTION
-══════════════════════════════════════ */
-function removeConn(from,to,reopen){
-  S.connections=S.connections.filter(function(c){
-    return !((c.from===from&&c.to===to)||(c.from===to&&c.to===from));
-  });
-  renderConns(); persist();
-  if(reopen) openDetailPanel(reopen);
-  toast(t('linkDeleted'));
-}
-
-/* ══════════════════════════════════════
-   RELATION MODAL
-══════════════════════════════════════ */
-function openRelModal(fromId,toId){
-  S.relFrom=fromId; S.relTo=toId;
-  var a=fullName(S.people[fromId])||'?', b=fullName(S.people[toId])||'?';
-  var dup=S.connections.some(function(c){
-    return (c.from===fromId&&c.to===toId)||(c.from===toId&&c.to===fromId);
-  });
-  if(dup){ toast(t('dupLink')); S.relFrom=null; S.relTo=null; return; }
-  var port=S.wiringFromPort||'';
-  var preType=port==='t'?'hijo':port==='b'?'padre':'pareja';
-  document.getElementById('rel-modal-title').textContent=t('linkType');
-  document.getElementById('rel-modal-sub').textContent=a+' ↔ '+b;
-  document.getElementById('rel-type').innerHTML=
-    '<option value="padre"'+(preType==='padre'?' selected':'')+'>'+(t('padre'))+' "'+b+'"</option>'+
-    '<option value="hijo"'+(preType==='hijo'?' selected':'')+'>'+(t('hijo'))+' "'+a+'"</option>'+
-    '<option value="pareja"'+(preType==='pareja'?' selected':'')+'>'+t('couple')+'</option>'+
-    '<option value="hermano">'+t('sibling')+'</option>';
-  document.getElementById('rel-modal').classList.add('open');
-}
-function cancelRel(){
-  document.getElementById('rel-modal').classList.remove('open');
-  S.relFrom=null; S.relTo=null;
-}
-function confirmRel(){
-  var from=S.relFrom, to=S.relTo;
-  var type=document.getElementById('rel-type').value;
-  if(type==='hijo'){ var tmp=from; from=to; to=tmp; type='padre'; }
-  S.connections.push({from:from,to:to,type:type});
-  renderConns(); persist();
-  document.getElementById('rel-modal').classList.remove('open');
-  openDetailPanel(S.relFrom||from);
-  S.relFrom=null; S.relTo=null; S.wiringFromPort=null;
-  toast(t('linkCreated'));
-}
-
-/* ══════════════════════════════════════
-   BULK DELETE
-══════════════════════════════════════ */
-function askDeleteMultiple(ids){
-  S._bulkDeleteIds=ids;
-  document.getElementById('del-title').textContent=t('deletePerson');
-  document.getElementById('del-name').textContent=ids.length+' '+t('bulkDelete');
-  document.getElementById('del-sub').style.display='none';
-  document.getElementById('del-modal').classList.add('open');
-}
-
-function openDetailPanel(id){
-  if(!S.people[id]) return;
-  selectCard(id);
-  var p=S.people[id];
-  var conns=S.connections.filter(function(c){return c.from===id||c.to===id;}).map(function(c){
-    var oid=c.from===id?c.to:c.from;
-    var o=S.people[oid]; if(!o) return null;
-    var lbl;
-    if(c.type==='pareja')       lbl=t('relPareja');
-    else if(c.type==='hermano') lbl=t('relHermano');
-    else if(c.type==='padre')   lbl=c.from===id?t('relPadreMadre'):t('relHijo');
-    return{c:c,o:o,oid:oid,lbl:lbl};
-  }).filter(Boolean);
-
-  var avInner = p.photo
-    ? '<img src="'+p.photo+'" alt="">'
-    : '<span style="font-family:Playfair Display,serif;font-size:17px;font-weight:700;color:#fff;letter-spacing:-0.5px">'+cardInitials(p)+'</span>';
-
-  var linksHtml = conns.map(function(item){
-    var mavInner = item.o.photo
-      ? '<img src="'+item.o.photo+'" alt="">'
-      : cardInitials(item.o);
-    return '<li>'
-      +'<div style="display:flex;align-items:center;gap:7px">'
-      +'<div class="mav '+gc(item.o.gender)+'">'+mavInner+'</div>'
-      +'<div>'
-        +'<div style="font-weight:700;font-size:12px">'+esc(fullName(item.o))+'</div>'
-        +'<div style="font-size:10px;color:var(--text2)">'+item.lbl+'</div>'
-      +'</div>'
-      +'</div>'
-      +'<button class="rx" onclick="removeConn(\''+item.c.from+'\',\''+item.c.to+'\',\''+id+'\')">✕</button>'
-      +'</li>';
-  }).join('');
-
-  var birthLine = p.birth
-    ? '<div class="drow"><span class="dlabel">'+t('birth')+'</span><span class="dval">'+p.birth+(p.birthplace?' · '+esc(p.birthplace):'')+'</span></div>'
-    : '';
-  var deathLine = p.death
-    ? '<div class="drow"><span class="dlabel">'+t('death')+'</span><span class="dval">'+p.death+'</span></div>'
-    : '';
-  var bioLine = p.bio ? '<div class="divider"></div><p class="dbio">'+esc(p.bio)+'</p>' : '';
-  var roleIcon = {masculino:'👨',femenino:'👩',otro:'🧑'}[p.gender]||'🧑';
-
-  var body = '<div class="dav-area">'
-    +'<div class="dav">'+avInner+'</div>'
-    +'<div class="dname">'+esc(fullName(p))+'</div>'
-    +'<div class="dsub">'+esc(p.role||roleIcon)+'</div>'
-    +'</div>'
-    +'<div class="dbody">'
-    +birthLine+deathLine+bioLine
-    +'<div class="divider"></div>'
-    +'<div class="hint-box">💡 '+t('hintLink')+'<br>'+t('hintPan')+'</div>'
-    +'<div style="font-weight:700;font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">'+t('links')+' ('+conns.length+')</div>'
-    +'<ul class="clist">'+linksHtml+'</ul>'
-    +'<div class="divider"></div>'
-    +'<button class="btn btn-gold btn-full" onclick="openEditPanel(\''+id+'\')">'+t('editBtn')+'</button>'
-    +'<button class="btn btn-red btn-full" onclick="askDelete(\''+id+'\')">'+t('deleteBtn')+'</button>'
-    +'</div>';
-
-  showPanel(t('profile'), body, true);
-}
-
-
-/* ══════════════════════════════════════
-   SHOW PANEL
-══════════════════════════════════════ */
-function showPanel(title,body,noPad=false){
-  const panel=document.getElementById('panel');
-  panel.style.display='flex';
-  panel.innerHTML=`<div class="ph">${title}<button class="phx" onclick="closePanel()">×</button></div><div class="pb" style="${noPad?'padding:0':''}">${body}</div>`;
-}
-
-/* ══════════════════════════════════════
-   FORM
-══════════════════════════════════════ */
-function formHTML(p){
-  p=p||{};
-  var photoHtml=p.photo
-    ?`<div style="text-align:center;margin-bottom:7px"><img src="${p.photo}" id="photo-prev" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid var(--gold)"></div><div class="pu-area" onclick="document.getElementById('photo-file').click()">${t('photoChange')}</div>`
-    :`<div class="pu-area" onclick="document.getElementById('photo-file').click()">${t('photoUpload')}</div><div id="pp-wrap" style="display:none;text-align:center;margin-top:7px"><img id="photo-prev" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid var(--gold)"></div>`;
-  return `
-    <div class="fg">${photoHtml}</div>
-    <div class="fg"><label>${t('firstName')}</label><input type="text" id="f-firstname" value="${esc(p.firstName||p.name||'')}" placeholder="Juan"></div>
-    <div class="fg"><label>${t('middleName')}</label><input type="text" id="f-middlename" value="${esc(p.middleName||'')}" placeholder="Carlos"></div>
-    <div class="fg"><label>${t('lastName')}</label><input type="text" id="f-lastname" value="${esc(p.lastName||'')}" placeholder="García López"></div>
-    <div class="fg"><label>${t('gender')}</label><div class="rg">
-      <div class="ro male ${(!p.gender||p.gender==='masculino')?'sel':''}" data-g="masculino">${t('male')}</div>
-      <div class="ro female ${p.gender==='femenino'?'sel':''}" data-g="femenino">${t('female')}</div>
-      <div class="ro neutral ${p.gender==='otro'?'sel':''}" data-g="otro">${t('other')}</div>
-    </div></div>
-    <div class="fg"><label>${t('role')}</label><input type="text" id="f-role" value="${esc(p.role||'')}" placeholder="${t('rolePlaceholder')}"></div>
-    <div class="fg"><label>${t('birthYear')}</label><input type="text" id="f-birth" value="${p.birth||''}" placeholder="1945"></div>
-    <div class="fg"><label>${t('deathYear')}</label><input type="text" id="f-death" value="${p.death||''}" placeholder="2010"></div>
-    <div class="fg"><label>${t('birthplace')}</label><input type="text" id="f-birthplace" value="${esc(p.birthplace||'')}" placeholder="${t('birthPlaceholder')}"></div>
-    <div class="fg"><label>${t('notes')}</label><textarea id="f-bio" placeholder="${t('notesPlaceholder')}">${esc(p.bio||'')}</textarea></div>
-    <div style="display:flex;gap:7px;margin-top:4px">
-      <button class="btn btn-gold" style="flex:1" onclick="savePerson()">${t('save')}</button>
-      <button class="btn btn-ghost" style="color:var(--text2);border-color:#ccc" onclick="closePanel()">${t('cancel')}</button>
-    </div>`;
-}
-function bindRadio(){
-  document.querySelectorAll('.ro[data-g]').forEach(el=>{
-    el.addEventListener('click',function(){
-      document.querySelectorAll('.ro[data-g]').forEach(e=>e.classList.remove('sel'));
-      this.classList.add('sel');
-    });
-  });
-}
-function handlePhoto(e){
-  const f=e.target.files[0];if(!f)return;
-  const r=new FileReader();
-  r.onload=ev=>{
-    S.photoData=ev.target.result;
-    const prev=document.getElementById('photo-prev');
-    const wrap=document.getElementById('pp-wrap');
-    if(prev){prev.src=S.photoData;prev.style.display='block';}
-    if(wrap)wrap.style.display='block';
-  };
-  r.readAsDataURL(f);e.target.value='';
-}
-function savePerson(){
-  const firstName=(document.getElementById('f-firstname').value||'').trim();
-  const middleName=(document.getElementById('f-middlename').value||'').trim();
-  const lastName=(document.getElementById('f-lastname').value||'').trim();
-  if(!firstName&&!lastName){toast(t('nameRequired'));return;}
-  const gender=(document.querySelector('.ro.sel[data-g]')||{}).dataset?.g||'masculino';
-  const data={
-    firstName,middleName,lastName,
-    name:[firstName,middleName,lastName].filter(Boolean).join(' '),
-    gender,
-    role:(document.getElementById('f-role').value||'').trim(),
-    birth:(document.getElementById('f-birth').value||'').trim(),
-    death:(document.getElementById('f-death').value||'').trim(),
-    birthplace:(document.getElementById('f-birthplace').value||'').trim(),
-    bio:(document.getElementById('f-bio').value||'').trim(),
-    photo:S.photoData||null,
-  };
-  if(S.panelMode==='edit'&&S.editingId){
-    Object.assign(S.people[S.editingId],data);
-    buildCard(S.editingId);renderConns();
-    toast(t('personUpdated'));
-  }else{
-    const id=uid();
-    const ids=Object.keys(S.people),cols=Math.max(1,Math.ceil(Math.sqrt(ids.length+1)));
-    data.x=(ids.length%cols)*250+80;data.y=Math.floor(ids.length/cols)*200+80;
-    S.people[id]=data;buildCard(id);
-    document.getElementById('empty').style.display='none';
-    renderConns();toast(t('personAdded'));
+  if(S.marquee){
+    const mx=Math.min(S.marquee.x0,S.marquee.x1),my=Math.min(S.marquee.y0,S.marquee.y1);
+    const mw=Math.abs(S.marquee.x1-S.marquee.x0),mh=Math.abs(S.marquee.y1-S.marquee.y0);
+    const cx0=(mx-S.panX)/S.zoom,cy0=(my-S.panY)/S.zoom,cx1=(mx+mw-S.panX)/S.zoom,cy1=(my+mh-S.panY)/S.zoom;
+    S.selectedIds.clear();
+    if(mw>4||mh>4){
+      document.querySelectorAll('.card').forEach(c=>{const p=S.people[c.dataset.id];if(!p)return;const inside=p.x+175>cx0&&p.x<cx1&&p.y+110>cy0&&p.y<cy1;c.classList.toggle('selected',inside);c.classList.remove('in-selection');if(inside)S.selectedIds.add(c.dataset.id);});
+      if(S.selectedIds.size>0)S.selectedId=[...S.selectedIds][0];
+      S._justMarqueed=true;
+    }else{document.querySelectorAll('.card').forEach(c=>c.classList.remove('selected','in-selection'));S.selectedId=null;S.selectedIds.clear();}
+    document.getElementById('marquee').style.display='none';cwEl.classList.remove('marquee-mode');S.marquee=null;
   }
-  persist();closePanel();
-}
-
-/* ══════════════════════════════════════
-   EXPORT / IMPORT
-══════════════════════════════════════ */
-function exportData(){
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([JSON.stringify({people:S.people,connections:S.connections,nextId:S.nextId,collapsed:S.collapsed},null,2)],{type:'application/json'}));
-  a.download='arbol-genealogico.json';a.click();toast(t('exported'));
-}
-function handleImport(e){
-  const f=e.target.files[0];if(!f)return;
-  const r=new FileReader();
-  r.onload=ev=>{
-    try{
-      const d=JSON.parse(ev.target.result);
-      S.people=d.people||{};S.connections=d.connections||[];S.nextId=d.nextId||1;S.collapsed=d.collapsed||{};
-      persist();renderAll();fitScreen();toast(t('imported'));
-    }catch{toast(t('importError'));}
-  };
-  r.readAsText(f);e.target.value='';
-}
-
-/* ══════════════════════════════════════
-   TOAST
-══════════════════════════════════════ */
-function toast(msg){
-  const t2=document.getElementById('toast');t2.textContent=msg;t2.classList.add('show');
-  clearTimeout(t2._t);t2._t=setTimeout(()=>t2.classList.remove('show'),2600);
-}
-
-function askDeleteMultiple(ids){
-  S._bulkDeleteIds=ids;
-  document.getElementById('del-title').textContent=t('deletePerson');
-  document.getElementById('del-name').textContent=ids.length+' '+t('bulkDelete');
-  document.getElementById('del-sub').style.display='none';
-  document.getElementById('del-modal').classList.add('open');
+  if(S.panning){S.panning=false;cwEl.classList.remove('panning');}
+  document.body.classList.remove('no-select');
+});
+cwEl.addEventListener('wheel',e=>{
+  e.preventDefault();const d=e.deltaY>0?-.1:.1;const nz=Math.max(.2,Math.min(2.5,S.zoom+d));
+  const r=cwEl.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;
+  S.panX=mx-(mx-S.panX)*(nz/S.zoom);S.panY=my-(my-S.panY)*(nz/S.zoom);S.zoom=nz;applyTransform();
+},{passive:false});
+cwEl.addEventListener('auxclick',e=>{e.preventDefault();});
+cwEl.addEventListener('click',e=>{
+  if(S._justMarqueed){S._justMarqueed=false;return;}
+  if(!e.target.closest('.card')&&!e.target.dataset.connIdx){S.selectedId=null;S.selectedIds.clear();document.querySelectorAll('.card').forEach(c=>c.classList.remove('selected'));}
+});
+cwEl.addEventListener('dblclick',e=>{
+  if(e.target.closest('.card')||e.target.closest('.port')||e.target.closest('.tbtn')||e.target.closest('.zbt'))return;
+  openAddPanel();
+});
+function findCardUnderMouse(mx,my){
+  const cx=(mx-S.panX)/S.zoom,cy=(my-S.panY)/S.zoom;
+  for(const id in S.people){const p=S.people[id];if(cx>=(p.x||0)&&cx<=(p.x||0)+175&&cy>=(p.y||0)&&cy<=(p.y||0)+115)return id;}
+  return null;
 }
 
 
 /* ══════════════════════════════════════
-   I18N
+   KEYBOARD
 ══════════════════════════════════════ */
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT')return;
+  if(e.key==='Delete'||e.key==='Backspace'){
+    if(S.selectedIds.size>1)askDeleteMultiple([...S.selectedIds]);
+    else if(S.selectedId&&S.people[S.selectedId])askDelete(S.selectedId);
+  }
+  if(e.key==='Escape'){
+    cancelDel();cancelRel();connActionCancel();closePanel();
+    if(S.marquee){document.getElementById('marquee').style.display='none';cwEl.classList.remove('marquee-mode');S.marquee=null;}
+    document.querySelectorAll('.card').forEach(c=>c.classList.remove('selected','in-selection'));
+    S.selectedId=null;S.selectedIds.clear();
+  }
+});
+
+
+
 var LANG={
   es:{
     title:'Árbol Genealógico',add:'+ Agregar',addIcon:'+',
@@ -2001,6 +1841,7 @@ try{var _sl=localStorage.getItem('gt_lang');if(_sl)currentLang=_sl;}catch(e){}
 loadData();renderAll();applyTransform();
 applyLangToUI();
 setTimeout(fitScreen,50);
+
 </script>
 </body>
 </html>
