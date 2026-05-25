@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Árbol Genealógico v1.10 - 2025 -->
+<!-- Árbol Genealógico v1.12 - 2025 -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -396,7 +396,7 @@ body.wiring .port{background:var(--gold);border-color:var(--gold2);}
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--leaf);flex-shrink:0"></div><span style="font-size:10px;color:#888">↑ padre / ↓ hijo</span></div>
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--gold);flex-shrink:0"></div><span style="font-size:10px;color:#888">← → pareja / hermano</span></div>
       <div class="legend-row" style="color:#aaa;font-size:10px">2× clic: editar</div>
-      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.10</div>
+      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.12</div>
     </div>
 
     <div class="zbts">
@@ -813,17 +813,79 @@ function renderConns(){
   });
 
   // Draw lateral connections (pareja, hermano)
-  lateralConns.forEach((conn,_)=>{
+  // HERMANO: chain line — sort siblings by X, draw line only between adjacent pairs
+  // This avoids any crossing: line goes left→right in display order.
+
+  // Group hermano connections by their shared parent key (sibling groups)
+  const hermanoGroups = {}; // parentKey → Set of node ids
+  lateralConns.filter(c=>c.type==='hermano').forEach(c=>{
+    // Use sorted node IDs as group key (connect siblings that share parents)
+    const parA = S.connections.filter(x=>x.type==='padre'&&x.to===c.from).map(x=>x.from).sort().join(',');
+    const parB = S.connections.filter(x=>x.type==='padre'&&x.to===c.to).map(x=>x.from).sort().join(',');
+    // Use union of both parent sets as group key, or connection id if no parents
+    const key = (parA&&parB&&parA===parB) ? parA : (parA||parB||c.from+'_'+c.to);
+    if(!hermanoGroups[key]) hermanoGroups[key]=new Set();
+    hermanoGroups[key].add(c.from);
+    hermanoGroups[key].add(c.to);
+  });
+
+  // For each hermano group: sort by X, draw chain line between adjacent pairs
+  const hermanoDrawn = new Set(); // track drawn connection pairs
+  Object.entries(hermanoGroups).forEach(([key, memberSet])=>{
+    const members=[...memberSet].filter(id=>S.people[id]);
+    if(members.length<2) return;
+    // Sort by current X position
+    members.sort((a,b)=>(S.people[a].x||0)-(S.people[b].x||0));
+    // Draw line between each adjacent pair
+    for(let i=0;i<members.length-1;i++){
+      const a=members[i], b=members[i+1];
+      const pairKey=[a,b].sort().join('|');
+      if(hermanoDrawn.has(pairKey)) continue;
+      hermanoDrawn.add(pairKey);
+      const fp=portCanvasPos(a,'r'); // right port of left node
+      const tp=portCanvasPos(b,'l'); // left port of right node
+      const col='#3A6186';
+      const midY=(fp.y+tp.y)/2;
+      // Horizontal elbow
+      let d;
+      if(Math.abs(fp.y-tp.y)<4){
+        d=`M${fp.x},${fp.y} L${tp.x},${tp.y}`;
+      } else {
+        const midX=(fp.x+tp.x)/2;
+        d=`M${fp.x},${fp.y} L${midX},${fp.y} L${midX},${tp.y} L${tp.x},${tp.y}`;
+      }
+      // Find a connection index for click handler
+      const connIdx=S.connections.findIndex(c=>c.type==='hermano'&&
+        ((c.from===a&&c.to===b)||(c.from===b&&c.to===a)));
+      const hit=document.createElementNS('http://www.w3.org/2000/svg','path');
+      hit.setAttribute('d',d);hit.setAttribute('stroke','transparent');
+      hit.setAttribute('stroke-width','14');hit.setAttribute('fill','none');
+      hit.setAttribute('cursor','pointer');hit.setAttribute('pointer-events','stroke');
+      if(connIdx>=0){hit.dataset.connIdx=connIdx;hit.addEventListener('click',onConnClick);}
+      svg.appendChild(hit);
+      const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('d',d);path.setAttribute('stroke',col);
+      path.setAttribute('stroke-width','2');path.setAttribute('fill','none');
+      path.setAttribute('stroke-dasharray','5 4');path.setAttribute('pointer-events','none');
+      svg.appendChild(path);
+      // Label only on first pair
+      if(i===0){
+        const lx=(fp.x+tp.x)/2, ly=Math.min(fp.y,tp.y)-8;
+        svg.appendChild(mkLabel(lx,ly,t('relHermano'),'#3A6186'));
+      }
+    }
+  });
+
+  // Draw pareja connections (unchanged)
+  lateralConns.filter(c=>c.type!=='hermano').forEach((conn)=>{
     const i=S.connections.indexOf(conn);
     const a=S.people[conn.from],b=S.people[conn.to];if(!a||!b)return;
-    let coupleIdx=0,isSecCouple=false,latLabel='';
-    if(conn.type==='pareja'){
-      const pConns=S.connections.filter(c=>c.type==='pareja'&&(c.from===conn.from||c.to===conn.from));
-      coupleIdx=pConns.indexOf(conn);isSecCouple=coupleIdx>0;
-      latLabel=coupleIdx===0?t('relPareja'):t('relPareja')+' '+(coupleIdx+1);
-    }else{latLabel=t('relHermano');}
-    const col=conn.type==='pareja'?col_pareja:col_hermano;
-    const dash=conn.type==='hermano'?'5 4':isSecCouple?'3 5':'none';
+    const pConnsFrom=S.connections.filter(c=>c.type==='pareja'&&(c.from===conn.from||c.to===conn.from));
+    const coupleIdx=pConnsFrom.indexOf(conn);
+    const isSecCouple=coupleIdx>0;
+    const latLabel=coupleIdx===0?t('relPareja'):t('relPareja')+' '+(coupleIdx+1);
+    const col=conn.type==='pareja'?'#C4972A':'#3A6186';
+    const dash=isSecCouple?'3 5':'none';
     const lw=isSecCouple?1.5:2.5;
     const acx=(a.x||0)+87.5,bcx=(b.x||0)+87.5;
     const ap=acx<=bcx?'r':'l',bp=acx<=bcx?'l':'r';
@@ -831,9 +893,9 @@ function renderConns(){
     const yOff=isSecCouple?16*coupleIdx:0;
     const fy=fp.y+yOff,ty2=tp.y+yOff;
     let d;
-    if(yOff===0&&Math.abs(fy-ty2)<3)d=`M${fp.x},${fy} L${tp.x},${ty2}`;
-    else if(yOff>0)d=`M${fp.x},${fp.y} L${fp.x},${fy} L${tp.x},${ty2} L${tp.x},${tp.y}`;
-    else{const midX=(fp.x+tp.x)/2;d=`M${fp.x},${fy} L${midX},${fy} L${midX},${ty2} L${tp.x},${ty2}`;}
+    if(yOff===0&&Math.abs(fy-ty2)<3) d=`M${fp.x},${fy} L${tp.x},${ty2}`;
+    else if(yOff>0) d=`M${fp.x},${fp.y} L${fp.x},${fy} L${tp.x},${ty2} L${tp.x},${tp.y}`;
+    else{ const midX=(fp.x+tp.x)/2;d=`M${fp.x},${fy} L${midX},${fy} L${midX},${ty2} L${tp.x},${ty2}`; }
     const hit=document.createElementNS('http://www.w3.org/2000/svg','path');
     hit.setAttribute('d',d);hit.setAttribute('stroke','transparent');hit.setAttribute('stroke-width','14');
     hit.setAttribute('fill','none');hit.setAttribute('cursor','pointer');hit.setAttribute('pointer-events','stroke');
@@ -1108,36 +1170,31 @@ function openRelModal(fromId,toId){
   });
   if(dup){ toast(t('dupLink')); S.relFrom=null; S.relTo=null; return; }
 
-  // Port semantics determine pre-selected type AND option order:
-  //   top port    → dragged upward = looking for a parent → pre-select "b is parent of a"
-  //   bottom port → dragged downward = connecting to child → pre-select "a is parent of b"
-  //   side ports  → horizontal = couple or sibling
   var port=S.wiringFromPort||'';
-  var preType = port==='t' ? 'hijo' : port==='b' ? 'padre' : 'pareja';
+  // Port filter rules:
+  //   t (top)    → only padre/hijo — NO hermano, NO pareja
+  //   b (bottom) → only padre/hijo — NO hermano, NO pareja
+  //   l/r (side) → only pareja + hermano — NO padre/hijo
 
-  document.getElementById('rel-modal-title').textContent=t('linkType');
-  // Show clear directional sub-label based on port
-  var subLabel = port==='t'
-    ? '⬆ "'+b+'" es padre/madre de "'+a+'"'
-    : port==='b'
-    ? '⬇ "'+a+'" es padre/madre de "'+b+'"'
-    : a+' ↔ '+b;
-  document.getElementById('rel-modal-sub').textContent=subLabel;
-
-  // Order options so pre-selected is always first
   var opts='';
-  if(preType==='hijo'){
+  if(port==='t'){
+    // Top port: "I'm looking for my parent" → only parent options
     opts+='<option value="hijo" selected>⬆ "'+b+'" es Padre/Madre de "'+a+'"</option>';
     opts+='<option value="padre">⬇ "'+a+'" es Padre/Madre de "'+b+'"</option>';
-  } else if(preType==='padre'){
+    document.getElementById('rel-modal-sub').textContent='⬆ Vincular como Padre/Madre';
+  } else if(port==='b'){
+    // Bottom port: "I'm connecting to a child" → only child options
     opts+='<option value="padre" selected>⬇ "'+a+'" es Padre/Madre de "'+b+'"</option>';
     opts+='<option value="hijo">⬆ "'+b+'" es Padre/Madre de "'+a+'"</option>';
+    document.getElementById('rel-modal-sub').textContent='⬇ Vincular como Hijo/a';
   } else {
+    // Side port (l/r): only pareja + hermano
     opts+='<option value="pareja" selected>↔ '+t('couple')+'</option>';
-    opts+='<option value="padre">⬇ "'+a+'" es Padre/Madre de "'+b+'"</option>';
-    opts+='<option value="hijo">⬆ "'+b+'" es Padre/Madre de "'+a+'"</option>';
+    opts+='<option value="hermano">↔ '+t('sibling')+'</option>';
+    document.getElementById('rel-modal-sub').textContent=a+' ↔ '+b;
   }
-  opts+='<option value="hermano">↔ '+t('sibling')+'</option>';
+
+  document.getElementById('rel-modal-title').textContent=t('linkType');
   document.getElementById('rel-type').innerHTML=opts;
   document.getElementById('rel-modal').classList.add('open');
 }
@@ -1311,7 +1368,7 @@ function copyTree(){
 
   var data=JSON.stringify({
     people:people, connections:connections, nextId:S.nextId,
-    collapsed:collapsed, _v:'arbol-genealogico-v1.10', _ts:Date.now(),
+    collapsed:collapsed, _v:'arbol-genealogico-v1.12', _ts:Date.now(),
     _partial:!copyAll, _count:ids.length
   });
 
