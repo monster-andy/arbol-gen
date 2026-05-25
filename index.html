@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Árbol Genealógico v1.9 - 2025 -->
+<!-- Árbol Genealógico v1.10 - 2025 -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -396,7 +396,7 @@ body.wiring .port{background:var(--gold);border-color:var(--gold2);}
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--leaf);flex-shrink:0"></div><span style="font-size:10px;color:#888">↑ padre / ↓ hijo</span></div>
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--gold);flex-shrink:0"></div><span style="font-size:10px;color:#888">← → pareja / hermano</span></div>
       <div class="legend-row" style="color:#aaa;font-size:10px">2× clic: editar</div>
-      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.9</div>
+      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.10</div>
     </div>
 
     <div class="zbts">
@@ -1311,7 +1311,7 @@ function copyTree(){
 
   var data=JSON.stringify({
     people:people, connections:connections, nextId:S.nextId,
-    collapsed:collapsed, _v:'arbol-genealogico-v1.9', _ts:Date.now(),
+    collapsed:collapsed, _v:'arbol-genealogico-v1.10', _ts:Date.now(),
     _partial:!copyAll, _count:ids.length
   });
 
