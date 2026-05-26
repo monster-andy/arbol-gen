@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Árbol Genealógico v1.14 - 2025 -->
+<!-- Árbol Genealógico v1.16 - 2025 -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -396,7 +396,7 @@ body.wiring .port{background:var(--gold);border-color:var(--gold2);}
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--leaf);flex-shrink:0"></div><span style="font-size:10px;color:#888">↑ padre / ↓ hijo</span></div>
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--gold);flex-shrink:0"></div><span style="font-size:10px;color:#888">← → pareja / hermano</span></div>
       <div class="legend-row" style="color:#aaa;font-size:10px">2× clic: editar</div>
-      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.14</div>
+      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.16</div>
     </div>
 
     <div class="zbts">
@@ -762,62 +762,80 @@ function renderConns(){
     if(!parentGroups[childParents].children.includes(c.to))parentGroups[childParents].children.push(c.to);
   });
 
-  // Draw padre connections (orthogonal bus style)
+  // Draw padre connections — Bezier curves from parents to children
   Object.values(parentGroups).forEach(({parents,children})=>{
-    const vParents=parents.filter(id=>S.people[id]);
-    // Sort children left-to-right by X so bus lines never cross
+    const vParents=parents.filter(id=>S.people[id])
+      .sort((a,b)=>(S.people[a].x||0)-(S.people[b].x||0));
     const vChildren=children.filter(id=>S.people[id])
       .sort((a,b)=>(S.people[a].x||0)-(S.people[b].x||0));
     if(!vParents.length||!vChildren.length)return;
 
-    // Sort parents left-to-right too
-    const vParentsSorted=vParents.sort((a,b)=>(S.people[a].x||0)-(S.people[b].x||0));
-    const parentPts=vParentsSorted.map(id=>portCanvasPos(id,'b'));
-    const childPts=vChildren.map(id=>portCanvasPos(id,'t'));
-    const parentBottomY=Math.max(...parentPts.map(p=>p.y));
-    const childTopY=Math.min(...childPts.map(p=>p.y));
-    // Bus sits 25px below parents (not halfway down)
-    const busY=Math.min(parentBottomY+25, parentBottomY+(childTopY-parentBottomY)*0.35);
-    const allX=[...parentPts.map(p=>p.x),...childPts.map(p=>p.x)];
-    const busX1=Math.min(...allX),busX2=Math.max(...allX);
+    const parentPts=vParents.map(id=>portCanvasPos(id,'b'));
+    const childPts =vChildren.map(id=>portCanvasPos(id,'t'));
 
-    // Detect secondary couple parent
-    const hasSecParent=vParentsSorted.some(pid=>
+    // Parent anchor: midpoint of all parents' bottom ports
+    const pxAvg=parentPts.reduce((s,p)=>s+p.x,0)/parentPts.length;
+    const pyAvg=parentPts.reduce((s,p)=>s+p.y,0)/parentPts.length;
+
+    // Detect secondary couple parent for dashed child lines
+    const hasSecParent=vParents.some(pid=>
       S.connections.some(c=>{
-        if(c.type!=='pareja')return false;
+        if(c.type!=='pareja') return false;
         const other=c.from===pid?c.to:c.from;
         const cc=S.connections.filter(x=>x.type==='pareja'&&(x.from===other||x.to===other));
         return cc.length>1&&cc.indexOf(c)>0;
       })
     );
 
-    vParentsSorted.forEach((id,i)=>{const pt=parentPts[i];svg.appendChild(mkLine(pt.x,pt.y,pt.x,busY,col_padre,2));});
-    if(busX1<busX2)svg.appendChild(mkLine(busX1,busY,busX2,busY,col_padre,2));
-    vChildren.forEach((id,i)=>{
-      const pt=childPts[i];
-      const line=mkLine(pt.x,busY,pt.x,pt.y,col_padre,2);
-      if(hasSecParent)line.setAttribute('stroke-dasharray','4 4');
-      svg.appendChild(line);
-    });
-    svg.appendChild(mkLabel((busX1+busX2)/2,busY-7,t('relPadreMadre'),col_padre));
+    const col_padre='#4A7C59';
 
-    // Clickable hit on bus
-    const hitIdx=S.connections.findIndex(c=>c.type==='padre'&&vParents.includes(c.from)&&vChildren.includes(c.to));
-    if(hitIdx>=0){
-      const hit=document.createElementNS('http://www.w3.org/2000/svg','rect');
-      hit.setAttribute('x',busX1-8);hit.setAttribute('y',busY-8);
-      hit.setAttribute('width',Math.max(busX2-busX1+16,16));hit.setAttribute('height',16);
-      hit.setAttribute('fill','transparent');hit.setAttribute('cursor','pointer');
-      hit.setAttribute('pointer-events','all');hit.dataset.connIdx=hitIdx;
-      hit.addEventListener('click',onConnClick);svg.appendChild(hit);
+    // Draw a short vertical from each parent bottom down to a common Y (bus)
+    const busY=pyAvg+28;
+    parentPts.forEach(pt=>{
+      svg.appendChild(mkLine(pt.x,pt.y,pt.x,busY,col_padre,2));
+    });
+
+    // Horizontal bar connecting all parent drops (if more than one parent)
+    if(parentPts.length>1){
+      const x1=parentPts[0].x, x2=parentPts[parentPts.length-1].x;
+      svg.appendChild(mkLine(x1,busY,x2,busY,col_padre,2));
+    }
+
+    // Bezier from bus midpoint to each child
+    const busMidX=parentPts.reduce((s,p)=>s+p.x,0)/parentPts.length;
+
+    childPts.forEach((cpt,ci)=>{
+      const isDashed=hasSecParent;
+      // Control points for smooth S-curve
+      const cy1=busY+(cpt.y-busY)*0.4;
+      const cy2=busY+(cpt.y-busY)*0.6;
+      const d=`M${busMidX},${busY} C${busMidX},${cy1} ${cpt.x},${cy2} ${cpt.x},${cpt.y}`;
+
+      // Hit area
+      const hit=document.createElementNS('http://www.w3.org/2000/svg','path');
+      hit.setAttribute('d',d);hit.setAttribute('stroke','transparent');
+      hit.setAttribute('stroke-width','14');hit.setAttribute('fill','none');
+      hit.setAttribute('cursor','pointer');hit.setAttribute('pointer-events','stroke');
+      const connIdx=S.connections.findIndex(c=>c.type==='padre'&&
+        vParents.includes(c.from)&&c.to===vChildren[ci]);
+      if(connIdx>=0){hit.dataset.connIdx=connIdx;hit.addEventListener('click',onConnClick);}
+      svg.appendChild(hit);
+
+      // Visible curve
+      const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('d',d);path.setAttribute('stroke',col_padre);
+      path.setAttribute('stroke-width','2');path.setAttribute('fill','none');
+      path.setAttribute('pointer-events','none');
+      if(isDashed) path.setAttribute('stroke-dasharray','4 4');
+      svg.appendChild(path);
+    });
+
+    // Label at bus midpoint
+    if(vChildren.length){
+      svg.appendChild(mkLabel(busMidX, busY-7, t('relPadreMadre'), col_padre));
     }
   });
 
-  // Draw lateral connections (pareja, hermano)
-  // HERMANO: chain line — sort siblings by X, draw line only between adjacent pairs
-  // This avoids any crossing: line goes left→right in display order.
-
-  // Group hermano connections by their shared parent key (sibling groups)
   // Build hermano groups using union-find on the hermano connection graph
   // This correctly chains A-B-C even when none have parents
   const _hParent={};
@@ -1373,7 +1391,7 @@ function copyTree(){
 
   var data=JSON.stringify({
     people:people, connections:connections, nextId:S.nextId,
-    collapsed:collapsed, _v:'arbol-genealogico-v1.14', _ts:Date.now(),
+    collapsed:collapsed, _v:'arbol-genealogico-v1.16', _ts:Date.now(),
     _partial:!copyAll, _count:ids.length
   });
 
@@ -1511,435 +1529,384 @@ function toast(msg){
 }
 
 function autoLayout(){
-  var ids = Object.keys(S.people);
-  if(!ids.length) return;
+  var ids=Object.keys(S.people);
+  if(!ids.length)return;
 
-  var CW=220, GAP_X=40, GAP_Y=140, PAD=80, H_EXP=145, H_COL=52;
-  var STAG_X=CW+GAP_X, STAG_Y=90;
+  var CW=220, CH=S.collapsed?0:145, GAP_X=50, GAP_Y=140, PAD=100;
+  function cardH(id){return S.collapsed[id]?52:145;}
 
-  function cardH(id){ return S.collapsed[id]?H_COL:H_EXP; }
-
-  // ── Maps ─────────────────────────────────────────────────
-  var couplesOf={}, childrenOf={}, parentsOf={};
-  ids.forEach(function(id){ childrenOf[id]=[]; parentsOf[id]=[]; couplesOf[id]=[]; });
+  /* ── 1. BUILD MAPS ─────────────────────────────────── */
+  var childrenOf={}, parentsOf={}, couplesOf={};
+  ids.forEach(function(id){childrenOf[id]=[];parentsOf[id]=[];couplesOf[id]=[];});
   S.connections.forEach(function(c){
     if(c.type==='pareja'){
-      if(!couplesOf[c.from].includes(c.to)) couplesOf[c.from].push(c.to);
-      if(!couplesOf[c.to].includes(c.from)) couplesOf[c.to].push(c.from);
-    } else if(c.type==='padre'){
-      if(!childrenOf[c.from].includes(c.to)) childrenOf[c.from].push(c.to);
-      if(!parentsOf[c.to].includes(c.from))  parentsOf[c.to].push(c.from);
+      if(!couplesOf[c.from].includes(c.to))couplesOf[c.from].push(c.to);
+      if(!couplesOf[c.to].includes(c.from))couplesOf[c.to].push(c.from);
+    }else if(c.type==='padre'){
+      if(!childrenOf[c.from].includes(c.to))childrenOf[c.from].push(c.to);
+      if(!parentsOf[c.to].includes(c.from))parentsOf[c.to].push(c.from);
     }
   });
-  function primaryCouple(id){ return couplesOf[id][0]; }
-  function sibKey(id){ return parentsOf[id].slice().sort().join('|'); }
+  function primaryCouple(id){return couplesOf[id][0];}
 
-  // ── Step 1: generations ──────────────────────────────────
+  /* ── 2. ASSIGN GENERATIONS (BFS from roots) ────────── */
+  // Roots = nodes with no parents
   var gen={};
-  ids.forEach(function(id){ gen[id]=0; });
-  var changed=true, itr=0;
-  while(changed && itr<60){
-    changed=false; itr++;
-    ids.forEach(function(id){
-      parentsOf[id].forEach(function(pid){
-        if(gen[id]<=gen[pid]){ gen[id]=gen[pid]+1; changed=true; }
-      });
+  ids.forEach(function(id){gen[id]=-1;});
+
+  // Hermano connections force same generation
+  function hermanoSync(){
+    var changed=false;
+    S.connections.forEach(function(c){
+      if(c.type!=='hermano')return;
+      if(gen[c.from]<0||gen[c.to]<0)return;
+      var mx=Math.max(gen[c.from],gen[c.to]);
+      if(gen[c.from]!==mx){gen[c.from]=mx;changed=true;}
+      if(gen[c.to]!==mx){gen[c.to]=mx;changed=true;}
     });
+    return changed;
+  }
+
+  // BFS from roots
+  var roots=ids.filter(function(id){return parentsOf[id].length===0;});
+  if(!roots.length)roots=[ids[0]];
+  roots.forEach(function(id){gen[id]=0;});
+
+  var queue=roots.slice();
+  var visited=new Set(roots);
+  while(queue.length){
+    var cur=queue.shift();
+    childrenOf[cur].forEach(function(cid){
+      var newG=gen[cur]+1;
+      if(gen[cid]<newG)gen[cid]=newG;
+      if(!visited.has(cid)){visited.add(cid);queue.push(cid);}
+    });
+  }
+  // Any unvisited nodes
+  ids.forEach(function(id){if(gen[id]<0)gen[id]=0;});
+
+  // Couples: same generation
+  var changed=true;
+  for(var i=0;i<30&&changed;i++){
+    changed=false;
     ids.forEach(function(id){
       couplesOf[id].forEach(function(pid){
         var mx=Math.max(gen[id],gen[pid]);
-        if(gen[id]!==mx){ gen[id]=mx; changed=true; }
-        if(gen[pid]!==mx){ gen[pid]=mx; changed=true; }
+        if(gen[id]!==mx){gen[id]=mx;changed=true;}
+        if(gen[pid]!==mx){gen[pid]=mx;changed=true;}
+      });
+      parentsOf[id].forEach(function(pid){
+        if(gen[id]<=gen[pid]){gen[id]=gen[pid]+1;changed=true;}
       });
     });
-    // Hermano connections: force same generation (max of the two)
-    S.connections.forEach(function(c){
-      if(c.type!=='hermano') return;
-      if(gen[c.from]===undefined||gen[c.to]===undefined) return;
-      var mx=Math.max(gen[c.from],gen[c.to]);
-      if(gen[c.from]!==mx){ gen[c.from]=mx; changed=true; }
-      if(gen[c.to]!==mx){ gen[c.to]=mx; changed=true; }
-    });
+    if(hermanoSync())changed=true;
   }
 
-  // ── Step 2: secondary couples ────────────────────────────
+  /* ── 3. IDENTIFY SECONDARY COUPLES ─────────────────── */
   var isSecondary={};
   ids.forEach(function(id){
     couplesOf[id].forEach(function(pid,ci){
-      if(ci===0) return;
-      if(!isSecondary[pid]) isSecondary[pid]={ofId:id, idx:ci};
+      if(ci===0)return;
+      if(!isSecondary[pid])isSecondary[pid]={ofId:id,idx:ci};
     });
   });
 
-  // ── Step 3: group by generation ──────────────────────────
+  /* ── 4. GROUP BY GENERATION ─────────────────────────── */
   var byGen={};
   ids.forEach(function(id){
-    if(isSecondary[id]) return;
+    if(isSecondary[id])return;
     var g=gen[id];
-    if(!byGen[g]) byGen[g]=[];
+    if(!byGen[g])byGen[g]=[];
     byGen[g].push(id);
   });
   var gens=Object.keys(byGen).map(Number).sort(function(a,b){return a-b;});
 
-  // ── Step 4: flat order per generation ────────────────────
-  // KEY RULE: siblings always go toward the CENTER, couples on the OUTSIDE.
-  // Within a sibling group: first sib gets couple LEFT, last sib gets couple RIGHT.
-  // Multiple sibling groups in same gen: sorted by parent position (left-to-right).
-  // Nodes with no parents but WITH a sibling connection → same row as their hermano.
+  /* ── 5. REINGOLD-TILFORD style X assignment ──────────── */
+  // For each generation, build ordered list of "family units":
+  // A family unit = [couple_left?, main, couple_right?]
+  // Siblings from same parents cluster together.
+  // Siblings (even without parents) via hermano conn cluster together.
 
+  // Union-find for hermano grouping
+  var uf={};
+  function ufFind(x){if(uf[x]===undefined)uf[x]=x;return uf[x]===x?x:(uf[x]=ufFind(uf[x]));}
+  function ufUnion(a,b){uf[ufFind(a)]=ufFind(b);}
+  S.connections.forEach(function(c){if(c.type==='hermano')ufUnion(c.from,c.to);});
+
+  var posX={};
+
+  // Build flat order per generation
   var flatGen={};
   gens.forEach(function(g){
     var members=byGen[g];
     var placed=new Set();
     var result=[];
 
-    function placeLeft(id){
-      if(placed.has(id)) return;
+    function placeUnit(id, coupleOnLeft){
+      if(placed.has(id))return;
       var pc=primaryCouple(id);
-      var ok=pc&&members.includes(pc)&&!placed.has(pc)&&!isSecondary[pc];
-      if(ok){placed.add(pc);result.push(pc);}
-      placed.add(id);result.push(id);
-    }
-    function placeRight(id){
-      if(placed.has(id)) return;
-      placed.add(id);result.push(id);
-      var pc=primaryCouple(id);
-      var ok=pc&&members.includes(pc)&&!placed.has(pc)&&!isSecondary[pc];
-      if(ok){placed.add(pc);result.push(pc);}
-    }
-    function placeGender(id){
-      if(placed.has(id)) return;
-      var pc=primaryCouple(id);
-      var ok=pc&&members.includes(pc)&&!placed.has(pc)&&!isSecondary[pc];
-      if(!ok){placed.add(id);result.push(id);return;}
-      var myG=S.people[id]&&S.people[id].gender;
-      var pcG=S.people[pc]&&S.people[pc].gender;
-      if(myG==='masculino'||(pcG==='femenino'&&myG!=='femenino')){
-        placed.add(id);result.push(id);placed.add(pc);result.push(pc);
+      var pcInGen=pc&&members.includes(pc)&&!placed.has(pc)&&!isSecondary[pc];
+      if(coupleOnLeft&&pcInGen){
+        placed.add(pc);result.push(pc);
+        placed.add(id);result.push(id);
       }else{
-        placed.add(pc);result.push(pc);placed.add(id);result.push(id);
+        placed.add(id);result.push(id);
+        if(pcInGen){placed.add(pc);result.push(pc);}
       }
     }
 
     // Group siblings by parent key
-    var pkMap={};
+    var sibGroups={};
     members.forEach(function(id){
-      if(!parentsOf[id].length) return;
-      var k=sibKey(id);
-      if(!pkMap[k]) pkMap[k]=[];
-      pkMap[k].push(id);
+      if(!parentsOf[id].length)return;
+      var k=parentsOf[id].slice().sort().join('|');
+      if(!sibGroups[k])sibGroups[k]=[];
+      sibGroups[k].push(id);
     });
 
-    // Sort sibling groups by average parent X (use gen-index as proxy if posX not ready)
-    // Sort siblings within group by connection order (oldest = leftmost)
-    Object.values(pkMap).forEach(function(grp){
+    // Sort siblings by birth order (connection order)
+    Object.values(sibGroups).forEach(function(grp){
       grp.sort(function(a,b){
         var ia=S.connections.findIndex(function(c){return c.type==='padre'&&c.to===a;});
         var ib=S.connections.findIndex(function(c){return c.type==='padre'&&c.to===b;});
         return ia-ib;
       });
-      // First sibling: couple LEFT. Last sibling: couple RIGHT. Middle: RIGHT.
+      // First sibling: couple to LEFT (mirrored). Others: couple to RIGHT.
       grp.forEach(function(sib,i){
-        if(placed.has(sib)) return;
-        if(i===0) placeLeft(sib);
-        else      placeRight(sib);
+        if(!placed.has(sib))placeUnit(sib,i===0);
       });
     });
 
-    // Place hermano-connected nodes adjacent to their partner in same gen
-    // (handles case where siblings have different/no shared parents)
+    // Hermano-only nodes (no parents): place adjacent to hermano partner
     members.forEach(function(id){
-      if(placed.has(id)) return;
-      // Find a hermano connection to an already-placed node in this gen
-      var hermanoPartner=null;
+      if(placed.has(id))return;
+      // Find hermano partner already placed
+      var partner=null;
       S.connections.forEach(function(c){
-        if(c.type!=='hermano') return;
-        var other=c.from===id?c.to:c.from===id?c.to:null;
-        if(!other&&c.to===id) other=c.from;
-        if(other&&members.includes(other)&&placed.has(other)&&!hermanoPartner)
-          hermanoPartner=other;
+        if(c.type!=='hermano')return;
+        var other=c.from===id?c.to:c.to===id?c.from:null;
+        if(other&&members.includes(other)&&placed.has(other)&&!partner)partner=other;
       });
-      if(hermanoPartner){
-        // Hermanos always go to the LEFT: find leftmost of the hermano's sibling group
-        // and insert before it (with couple to the LEFT of this node)
-        // Find the leftmost position of hermanoPartner's entire sibling group
-        var hermanoKey=sibKey(hermanoPartner);
-        var groupStart=result.indexOf(hermanoPartner);
-        if(hermanoKey){
-          result.forEach(function(o,ri){
-            var oKey=sibKey(o);
-            if(oKey===hermanoKey) groupStart=Math.min(groupStart,ri);
-            // Also include couples of the group
-            var opc=primaryCouple(o);
-            if(opc&&sibKey(opc)===hermanoKey) groupStart=Math.min(groupStart,ri);
-          });
-        }
-        if(groupStart<0) groupStart=0;
+      if(partner){
+        // Find leftmost index of partner's group and insert before it
+        var grpRoot=ufFind(partner);
+        var leftmost=result.length;
+        result.forEach(function(o,ri){if(ufFind(o)===grpRoot)leftmost=Math.min(leftmost,ri);});
+        var pc=primaryCouple(id);
+        var pcInGen=pc&&members.includes(pc)&&!placed.has(pc)&&!isSecondary[pc];
         var toInsert=[];
-        // Place partner (couple) first if any, then this node — so couple is LEFT of hermano
+        if(pcInGen){placed.add(pc);toInsert.push(pc);}
+        placed.add(id);toInsert.push(id);
+        result.splice(leftmost,0,...toInsert);
+      }else{
+        // Gender default: male left, female right
         var pc=primaryCouple(id);
-        if(pc&&members.includes(pc)&&!placed.has(pc)&&!isSecondary[pc]){
-          placed.add(pc); toInsert.push(pc);
-        }
-        placed.add(id); toInsert.push(id);
-        result.splice(groupStart,0,...toInsert);
-      } else {
-        var pc=primaryCouple(id);
-        if(pc&&placed.has(pc)){
-          placed.add(id);
-          result.splice(result.indexOf(pc),0,id);
-        } else {
-          placeGender(id);
+        var pcInGen=pc&&members.includes(pc)&&!placed.has(pc)&&!isSecondary[pc];
+        if(!pcInGen){placed.add(id);result.push(id);}
+        else{
+          var mg=S.people[id]&&S.people[id].gender;
+          var pg=S.people[pc]&&S.people[pc].gender;
+          if(mg==='masculino'||(pg==='femenino'&&mg!=='femenino')){
+            placed.add(id);result.push(id);placed.add(pc);result.push(pc);
+          }else{
+            placed.add(pc);result.push(pc);placed.add(id);result.push(id);
+          }
         }
       }
+    });
+
+    // Any remaining
+    members.forEach(function(id){
+      if(!placed.has(id)){placed.add(id);result.push(id);}
     });
 
     flatGen[g]=result;
   });
 
-  // ── Step 5: gap between adjacent nodes ──────────────────
-  // Double gap between siblings-with-couples so their partners fit
+  /* ── 6. COMPUTE X POSITIONS ─────────────────────────── */
+  // Gap between adjacent nodes in same generation
   function gapBetween(a,b){
-    var ka=sibKey(a), kb=sibKey(b);
-    if(ka&&kb&&ka===kb){
-      if(primaryCouple(a)||primaryCouple(b)) return GAP_X*3+CW;
-    }
+    var ka=parentsOf[a].slice().sort().join('|');
+    var kb=parentsOf[b].slice().sort().join('|');
+    // Extra gap between sibling groups that have couples
+    if(ka&&kb&&ka===kb&&(primaryCouple(a)||primaryCouple(b)))return GAP_X*2+CW;
     return GAP_X;
   }
-  // Check if two nodes are hermano-connected (for ordering purposes)
-  function areHermanos(a,b){
-    return S.connections.some(function(c){
-      return c.type==='hermano'&&((c.from===a&&c.to===b)||(c.from===b&&c.to===a));
-    });
-  }
-
-  // ── Step 6: X positions (iterative centering) ────────────
-  var posX={};
-
-  // Initial sequential placement
-  gens.forEach(function(g){
-    var order=flatGen[g];
-    var cursor=PAD;
-    order.forEach(function(id,i){
-      if(posX[id]===undefined) posX[id]=cursor;
-      var ng=i<order.length-1?gapBetween(id,order[i+1]):GAP_X;
-      cursor=Math.max(cursor,posX[id])+CW+ng;
-    });
-  });
-
-  function resolveOverlaps(order){
-    if(!order.length) return;
-    var sorted=order.slice().sort(function(a,b){return posX[a]-posX[b];});
-    // First pass: only push right when nodes actually overlap (don't enforce PAD as start)
-    for(var i=1;i<sorted.length;i++){
-      var prev=sorted[i-1], cur=sorted[i];
-      var minX=(posX[prev]||0)+CW+gapBetween(prev,cur);
-      if((posX[cur]||0)<minX) posX[cur]=minX;
-    }
-  }
-  // Align a generation's leftmost node to be no further left than
-  // the minimum X of nodes-with-connections in that generation
-  function alignGenLeft(order){
-    if(!order.length) return;
-    // Find leftmost X among nodes that have parents OR children (anchored nodes)
-    var anchorXs=order.filter(function(id){
-      return parentsOf[id].length>0 || childrenOf[id].length>0;
-    }).map(function(id){return posX[id]||0;});
-    if(!anchorXs.length) return; // all floating, leave as is
-    var anchorLeft=Math.min.apply(null,anchorXs);
-    // Find leftmost X overall in this generation
-    var allXs=order.map(function(id){return posX[id]||0;});
-    var genLeft=Math.min.apply(null,allXs);
-    // If floating nodes are further left than anchored ones, push them right
-    if(genLeft < anchorLeft-CW-GAP_X*2){
-      var shift=anchorLeft-CW-GAP_X*2-genLeft;
-      order.forEach(function(id){
-        if((posX[id]||0) < anchorLeft-GAP_X) posX[id]=(posX[id]||0)+shift;
-      });
-    }
-  }
-
-  function blockWidth(arr){
+  function blockW(arr){
     var w=0;
-    arr.forEach(function(o,i){ w+=CW; if(i<arr.length-1)w+=gapBetween(o,arr[i+1]); });
+    arr.forEach(function(o,i){w+=CW;if(i<arr.length-1)w+=gapBetween(o,arr[i+1]);});
     return w;
   }
   function placeBlock(arr,left){
-    var cx=left;
-    arr.forEach(function(o,i){ posX[o]=cx; if(i<arr.length-1)cx+=CW+gapBetween(o,arr[i+1]); });
+    var x=left;
+    arr.forEach(function(o,i){posX[o]=x;if(i<arr.length-1)x+=CW+gapBetween(o,arr[i+1]);});
   }
 
-  // Iterative centering with global overlap resolution after each pass
-  for(var iter=0;iter<15;iter++){
-
-    // TOP-DOWN: center each sibling block under their parents
-    gens.forEach(function(g){
-      var order=flatGen[g];
-      var done=new Set();
-      order.forEach(function(id){
-        if(done.has(id)) return;
-        var pars=parentsOf[id]; if(!pars.length) return;
-        var myKey=sibKey(id);
-        var sibs=order.filter(function(o){ return sibKey(o)===myKey&&parentsOf[o].length>0; });
-        var blockSet=new Set();
-        sibs.forEach(function(s){
-          done.add(s); blockSet.add(s);
-          var pc=primaryCouple(s);
-          if(pc&&(byGen[g]||[]).includes(pc)&&!isSecondary[pc]){ done.add(pc); blockSet.add(pc); }
-        });
-
-        // Parent center: actual parents of these siblings + their primary couples
-        var allParents=[];
-        sibs.forEach(function(s){ parentsOf[s].forEach(function(pid){if(!allParents.includes(pid))allParents.push(pid);}); });
-        var parentGen=gen[allParents[0]];
-        var origPars=allParents.slice();
-        origPars.forEach(function(pid){
-          var pc=primaryCouple(pid);
-          if(pc&&gen[pc]===parentGen&&!isSecondary[pc]&&!allParents.includes(pc)){
-            var isCoPar=sibs.some(function(s){return parentsOf[s].includes(pc);});
-            if(isCoPar) allParents.push(pc);
-          }
-        });
-        var pxs=allParents.map(function(p){return posX[p]||0;});
-        if(!pxs.length) return;
-        var parentCenter=(Math.min.apply(null,pxs)+Math.max.apply(null,pxs)+CW)/2;
-        var orderedBlock=order.filter(function(o){return blockSet.has(o);});
-        var bw=blockWidth(orderedBlock);
-        placeBlock(orderedBlock, parentCenter-bw/2);
-      });
-      resolveOverlaps(order);
+  // Initial placement: sequential left-to-right
+  gens.forEach(function(g){
+    var order=flatGen[g];
+    var x=PAD;
+    order.forEach(function(id,i){
+      posX[id]=x;
+      x+=CW+(i<order.length-1?gapBetween(id,order[i+1]):GAP_X);
     });
+  });
 
-    // BOTTOM-UP: center parents over their SHARED children only
+  // Overlap resolution: push right only, never left
+  function resolveOverlaps(order){
+    var sorted=order.slice().sort(function(a,b){return posX[a]-posX[b];});
+    for(var i=1;i<sorted.length;i++){
+      var need=posX[sorted[i-1]]+CW+gapBetween(sorted[i-1],sorted[i]);
+      if(posX[sorted[i]]<need)posX[sorted[i]]=need;
+    }
+  }
+
+  // ── PHASE 1: Bottom-up — center parents over their children ──
+  // Run from deepest generation upward
+  for(var pass=0;pass<6;pass++){
     var gRev=gens.slice().reverse();
     gRev.forEach(function(g){
       var order=flatGen[g];
       var done=new Set();
       order.forEach(function(id){
-        if(done.has(id)) return;
+        if(done.has(id))return;
+        // Build parent unit: id + primary couple
         var unit=[id]; done.add(id);
         var pc=primaryCouple(id);
-        if(pc&&(byGen[g]||[]).includes(pc)&&!isSecondary[pc]){ done.add(pc); unit.push(pc); }
+        if(pc&&(byGen[g]||[]).includes(pc)&&!isSecondary[pc]){done.add(pc);unit.push(pc);}
 
-        // Collect children:
-        // - If unit has 2 members (couple): only children shared by both
-        // - If unit has 1 member (single parent): all their children
-        var allCh=[];
-        if(unit.length>=2){
-          // Couple: only children whose parent set is exactly this couple
-          unit.forEach(function(uid){
-            childrenOf[uid].forEach(function(cid){
-              var pars=parentsOf[cid];
-              var allIn=pars.length>0&&pars.every(function(pid){return unit.includes(pid);});
-              if(allIn&&!allCh.includes(cid)) allCh.push(cid);
-            });
+        // Get children of this unit
+        var children=[];
+        if(unit.length===2){
+          // Couple: shared children only
+          var u0=unit[0],u1=unit[1];
+          childrenOf[u0].forEach(function(cid){
+            if(parentsOf[cid].includes(u1)&&!children.includes(cid))children.push(cid);
           });
-        } else {
-          // Single parent: all their children
-          childrenOf[unit[0]].forEach(function(cid){
-            if(!allCh.includes(cid)) allCh.push(cid);
-          });
+        }else{
+          // Single parent: all children
+          childrenOf[unit[0]].forEach(function(cid){if(!children.includes(cid))children.push(cid);});
         }
-        if(!allCh.length) return;
-        var cxs=allCh.map(function(c){return posX[c]||0;});
-        var childCenter=(Math.min.apply(null,cxs)+Math.max.apply(null,cxs)+CW)/2;
+        if(!children.length)return;
+
+        // Child span center
+        var cxs=children.map(function(c){return posX[c]||0;});
+        var cMin=Math.min.apply(null,cxs);
+        var cMax=Math.max.apply(null,cxs);
+        var childCenter=(cMin+cMax+CW)/2;
+
+        // Center unit over children
         var orderedUnit=order.filter(function(o){return unit.includes(o);});
-        var uw=blockWidth(orderedUnit);
-        var newLeft=childCenter-uw/2;
-        if(newLeft<PAD) newLeft=PAD;
-        placeBlock(orderedUnit, newLeft);
+        var uw=blockW(orderedUnit);
+        placeBlock(orderedUnit, childCenter-uw/2);
       });
       resolveOverlaps(order);
     });
 
-    // Final pass: resolve overlaps and align floating nodes
+    // ── PHASE 2: Top-down — center children under parents ──
     gens.forEach(function(g){
-      resolveOverlaps(flatGen[g]);
-      alignGenLeft(flatGen[g]);
+      var order=flatGen[g];
+      var done=new Set();
+      order.forEach(function(id){
+        if(done.has(id))return;
+        if(!parentsOf[id].length)return;
+        var sk=parentsOf[id].slice().sort().join('|');
+        // Get all siblings with same parent set
+        var sibs=order.filter(function(o){
+          return !done.has(o)&&parentsOf[o].slice().sort().join('|')===sk;
+        });
+        var blockSet=new Set();
+        sibs.forEach(function(s){
+          done.add(s);blockSet.add(s);
+          var spc=primaryCouple(s);
+          if(spc&&(byGen[g]||[]).includes(spc)&&!isSecondary[spc]){done.add(spc);blockSet.add(spc);}
+        });
+        // Parent center
+        var allPars=parentsOf[id].slice();
+        var pGen=gen[allPars[0]];
+        allPars.forEach(function(pid){
+          var ppc=primaryCouple(pid);
+          if(ppc&&gen[ppc]===pGen&&!isSecondary[ppc]&&!allPars.includes(ppc)){
+            if(sibs.some(function(s){return parentsOf[s].includes(ppc);}))allPars.push(ppc);
+          }
+        });
+        var pxs=allPars.filter(function(p){return posX[p]!==undefined;}).map(function(p){return posX[p];});
+        if(!pxs.length)return;
+        var parCenter=(Math.min.apply(null,pxs)+Math.max.apply(null,pxs)+CW)/2;
+        var orderedBlock=order.filter(function(o){return blockSet.has(o);});
+        placeBlock(orderedBlock, parCenter-blockW(orderedBlock)/2);
+      });
+      resolveOverlaps(order);
     });
   }
 
-  // Final pass: shift entire tree left to start at PAD
-  // (remove any accumulated right-drift from resolveOverlaps)
-  var allXs=[];
-  gens.forEach(function(g){ flatGen[g].forEach(function(id){ allXs.push(posX[id]||0); }); });
-  if(allXs.length){
-    var minX=Math.min.apply(null,allXs);
-    var shift=PAD-minX;
-    if(Math.abs(shift)>1){
-      gens.forEach(function(g){ flatGen[g].forEach(function(id){ posX[id]=(posX[id]||0)+shift; }); });
-    }
-  }
+  // Normalize: shift all to start at PAD
+  var allX=[];
+  gens.forEach(function(g){flatGen[g].forEach(function(id){allX.push(posX[id]||0);});});
+  var minX=Math.min.apply(null,allX)||0;
+  var shift=PAD-minX;
+  gens.forEach(function(g){flatGen[g].forEach(function(id){posX[id]=(posX[id]||0)+shift;});});
 
-  // ── Step 7: Y positions (collapsed-height-aware) ─────────
+  /* ── 7. SECONDARY COUPLES: diagonal placement ───────── */
+  var posY={};
+  // First assign Y for primary nodes
   var genY={};
   var curY=PAD;
   gens.forEach(function(g){
     genY[g]=curY;
-    var maxH=0;
+    var maxH=52;
     (byGen[g]||[]).forEach(function(id){var h=cardH(id);if(h>maxH)maxH=h;});
-    if(!maxH)maxH=H_EXP;
     curY+=maxH+GAP_Y;
   });
-  var posY={};
   ids.forEach(function(id){
-    if(!isSecondary[id])
-      posY[id]=genY[gen[id]]!==undefined?genY[gen[id]]:PAD+gen[id]*(H_EXP+GAP_Y);
+    if(!isSecondary[id])posY[id]=genY[gen[id]]!==undefined?genY[gen[id]]:PAD;
   });
 
-  // ── Step 8: secondary couples diagonal ──────────────────
+  // Secondary couples: staggered diagonally
   Object.keys(isSecondary).forEach(function(secId){
     var info=isSecondary[secId];
     var mainId=info.ofId, idx=info.idx;
-    var mainX=posX[mainId]||PAD;
-    var mainYv=posY[mainId]||PAD;
+    var mainX=posX[mainId]||PAD, mainYv=posY[mainId]||PAD;
     var pc=couplesOf[mainId][0];
     var pcX=pc&&posX[pc]!==undefined?posX[pc]:mainX+CW+GAP_X;
     var goRight=pcX>mainX;
-    posX[secId]=goRight?pcX+STAG_X*idx:mainX-STAG_X*idx;
-    posY[secId]=mainYv+STAG_Y*idx;
+    posX[secId]=goRight?pcX+(CW+GAP_X)*idx:mainX-(CW+GAP_X)*idx;
+    posY[secId]=mainYv+90*idx;
   });
 
-  // ── Step 8b: re-center children of secondary couples ─────
-  gens.forEach(function(g){
-    var order=flatGen[g];
-    order.forEach(function(id){
-      if(!parentsOf[id].length) return;
-      var hasSecPar=parentsOf[id].some(function(pid){return isSecondary[pid];});
-      if(!hasSecPar) return;
-      var myKey=sibKey(id);
-      var sibs=order.filter(function(o){return sibKey(o)===myKey&&parentsOf[o].length>0;});
-      var allParIds=[];
-      sibs.forEach(function(s){parentsOf[s].forEach(function(pid){if(!allParIds.includes(pid))allParIds.push(pid);});});
-      var pxs=allParIds.filter(function(p){return posX[p]!==undefined;}).map(function(p){return posX[p];});
-      if(!pxs.length) return;
-      var parentCenter=(Math.min.apply(null,pxs)+Math.max.apply(null,pxs)+CW)/2;
-      var bw=sibs.length*(CW+GAP_X)-GAP_X;
-      var newLeft=parentCenter-bw/2;
-      var orderedSibs=order.filter(function(o){return sibs.includes(o);});
-      orderedSibs.forEach(function(o,i){posX[o]=newLeft+i*(CW+GAP_X);});
-    });
-    resolveOverlaps(order);
-  });
-
-  // ── Step 9: adjust Y — secondary parents push children down ─
+  // Push child generations down to clear secondary couples
   Object.keys(isSecondary).forEach(function(secId){
     var info=isSecondary[secId];
     var mainId=info.ofId;
-    var secY=posY[secId];
+    var secBottomY=(posY[secId]||0)+cardH(secId)+GAP_Y;
     childrenOf[secId].forEach(function(cid){
-      var childG=gen[cid];
-      if(childG===undefined) return;
-      var minY=secY+cardH(secId)+GAP_Y;
-      if(genY[childG]<minY){
-        var delta=minY-genY[childG];
-        gens.forEach(function(gg){if(gg>=childG)genY[gg]+=delta;});
-        ids.forEach(function(id){if(!isSecondary[id]&&gen[id]>=childG)posY[id]=genY[gen[id]];});
+      var cg=gen[cid];
+      if(cg===undefined)return;
+      if(genY[cg]<secBottomY){
+        var delta=secBottomY-genY[cg];
+        gens.forEach(function(gg){if(gg>=cg){genY[gg]+=delta;ids.forEach(function(id){if(!isSecondary[id]&&gen[id]===gg)posY[id]=genY[gg];});}});
       }
     });
   });
 
-  // ── Step 10: apply ───────────────────────────────────────
+  // Re-center children of secondary couples (step 8b)
+  gens.forEach(function(g){
+    var order=flatGen[g];
+    order.forEach(function(id){
+      if(!parentsOf[id].length)return;
+      if(!parentsOf[id].some(function(pid){return isSecondary[pid];}))return;
+      var sk=parentsOf[id].slice().sort().join('|');
+      var sibs=order.filter(function(o){return parentsOf[o].slice().sort().join('|')===sk;});
+      var pxs=parentsOf[id].filter(function(p){return posX[p]!==undefined;}).map(function(p){return posX[p];});
+      if(!pxs.length)return;
+      var parCenter=(Math.min.apply(null,pxs)+Math.max.apply(null,pxs)+CW)/2;
+      var orderedSibs=order.filter(function(o){return sibs.includes(o);});
+      placeBlock(orderedSibs, parCenter-blockW(orderedSibs)/2);
+    });
+    resolveOverlaps(order);
+  });
+
+  /* ── 8. APPLY ────────────────────────────────────────── */
   ids.forEach(function(id){
     S.people[id].x=Math.max(0,posX[id]!==undefined?posX[id]:PAD);
     S.people[id].y=posY[id]!==undefined?posY[id]:PAD;
