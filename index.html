@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Árbol Genealógico v1.33 - 2025 -->
+<!-- Árbol Genealógico v1.40 - 2025 -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -381,7 +381,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
       <span class="logo-top">Árbol</span>
       <span class="logo-bottom"> Genealógico</span>
     </div>
-    <span style="font-size:9px;opacity:0.4;font-family:'Lato',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--cream);margin-left:4px;align-self:flex-end;padding-bottom:2px">v1.33</span>
+    <span style="font-size:9px;opacity:0.4;font-family:'Lato',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--cream);margin-left:4px;align-self:flex-end;padding-bottom:2px">v1.40</span>
   </div>
   <div class="hbtns">
     <button class="lang-btn" id="lang-btn" onclick="toggleLang()" ontouchstart="toggleLang();event.preventDefault()" title="Idioma / Language">
@@ -422,7 +422,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--leaf);flex-shrink:0"></div><span style="font-size:10px;color:#888">↑ padre / ↓ hijo</span></div>
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--gold);flex-shrink:0"></div><span style="font-size:10px;color:#888">← → pareja / hermano</span></div>
       <div class="legend-row" style="color:#aaa;font-size:10px">2× clic: editar</div>
-      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.33</div>
+      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.40</div>
     </div>
 
     <div class="zbts">
@@ -562,7 +562,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
 <input type="file" id="imp-file" accept=".json" style="display:none" onchange="handleImport(event)">
 <input type="file" id="photo-file" accept="image/*" style="display:none" onchange="handlePhoto(event)">
 
-<script>/* Árbol Genealógico v1.33 - 2025 */
+<script>/* Árbol Genealógico v1.40 - 2025 */
 
 const uid=()=>'p'+(S.nextId++);
 const initials=n=>n.trim().split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
@@ -698,13 +698,19 @@ function onCardMD(e){
   e.stopPropagation();
   const id=drag.dataset.drag;
   S.draggingCard=id;S.didDrag=false;
+  // Always capture ALL rigid couple offsets from current positions at drag start
   S.connections.forEach(function(c){
     if(c.type!=='pareja')return;
-    var cpId=c.from===id?c.to:c.to===id?c.from:null;if(!cpId)return;
-    if(S.connections.some(function(x){return x.type==='padre'&&x.to===cpId;}))return;
-    if(!S.connections.some(function(x){return x.type==='hermano'&&(x.from===id||x.to===id);}))return;
-    var cp=S.people[cpId],p=S.people[id];if(!cp||!p)return;
-    S['_roff_'+[id,cpId].sort().join('|')]=(cp.x||0)-(p.x||0);
+    var aHasPar=S.connections.some(function(x){return x.type==='padre'&&x.to===c.from;});
+    var bHasPar=S.connections.some(function(x){return x.type==='padre'&&x.to===c.to;});
+    if(aHasPar===bHasPar)return;
+    var anchorId=aHasPar?c.from:c.to;
+    var floatId=aHasPar?c.to:c.from;
+    var anchorHasSib=S.connections.some(function(x){return x.type==='hermano'&&(x.from===anchorId||x.to===anchorId);});
+    if(!anchorHasSib)return;
+    var anchor=S.people[anchorId],floater=S.people[floatId];
+    if(!anchor||!floater)return;
+    S['_roff_'+[anchorId,floatId].sort().join('|')]=(floater.x||0)-(anchor.x||0);
   });
   const p=S.people[id];
   const wx=(e.clientX-S.panX)/S.zoom,wy=(e.clientY-S.panY)/S.zoom;
@@ -1546,7 +1552,7 @@ function copyTree(){
 
   var data=JSON.stringify({
     people:people, connections:connections, nextId:S.nextId,
-    collapsed:collapsed, _v:'arbol-genealogico-v1.33', _ts:Date.now(),
+    collapsed:collapsed, _v:'arbol-genealogico-v1.40', _ts:Date.now(),
     _partial:!copyAll, _count:ids.length
   });
 
@@ -1688,13 +1694,28 @@ function confirmOrganize(){
 }
 
 function snapToGrid(onlyIds, yOnly){
-  // Alinear: move each node the MINIMUM amount to snap to nearest 10px grid.
-  // Groups nodes within TOL px in Y → snaps to median Y.
-  // Groups nodes within TOL px in X → snaps to median X.
-  // Never reorders, never changes gaps — just tiny adjustments.
   var ids=onlyIds?[...onlyIds]:Object.keys(S.people);
   if(!ids.length)return;
-  var TOL=4; // only snap nodes within 4px
+  var TOL_Y=60;
+  var TOL_X=4;
+  // Update rigid offsets from CURRENT positions before any snapping
+  // so Alinear always preserves the gap as it is RIGHT NOW
+  S.connections.forEach(function(c){
+    if(c.type!=='pareja')return;
+    var aHasPar=S.connections.some(function(x){return x.type==='padre'&&x.to===c.from;});
+    var bHasPar=S.connections.some(function(x){return x.type==='padre'&&x.to===c.to;});
+    if(aHasPar===bHasPar)return;
+    var anchorId=aHasPar?c.from:c.to;
+    var floatId=aHasPar?c.to:c.from;
+    var anchorHasSib=S.connections.some(function(x){
+      return x.type==='hermano'&&(x.from===anchorId||x.to===anchorId);
+    });
+    if(!anchorHasSib)return;
+    var anchor=S.people[anchorId],floater=S.people[floatId];
+    if(!anchor||!floater)return;
+    var key='_roff_'+[anchorId,floatId].sort().join('|');
+    S[key]=(floater.x||0)-(anchor.x||0);
+  });
 
   // Snap Y: group by proximity, move to median
   var yGroups=[];
@@ -1702,7 +1723,7 @@ function snapToGrid(onlyIds, yOnly){
     var p=S.people[id];if(!p)return;
     var y=p.y||0;var found=false;
     yGroups.forEach(function(g){
-      if(Math.abs(g.median-y)<TOL){
+      if(Math.abs(g.median-y)<TOL_Y){
         g.ids.push(id);g.sum+=y;g.median=g.sum/g.ids.length;found=true;
       }
     });
@@ -1713,28 +1734,48 @@ function snapToGrid(onlyIds, yOnly){
     g.ids.forEach(function(id){S.people[id].y=targetY;});
   });
 
-  // X snap: only snap nodes that are within TOL of a vertical alignment
-  // Use a separate (larger) tolerance for vertical grouping
+  // Snap X: only snap if 2+ nodes nearly aligned, and skip couple partners
+  // (preserve manual gaps between couples)
   if(!yOnly){
     var xGroups=[];
     ids.forEach(function(id){
       var p=S.people[id];if(!p)return;
       var x=p.x||0;var found=false;
       xGroups.forEach(function(g){
-        if(Math.abs(g.median-x)<TOL){
+        if(Math.abs(g.median-x)<TOL_X){
           g.ids.push(id);g.sum+=x;g.median=g.sum/g.ids.length;found=true;
         }
       });
       if(!found)xGroups.push({ids:[id],sum:x,median:x});
     });
-    xGroups.forEach(function(g){
-      if(g.ids.length<2)return; // only snap if 2+ nodes are aligned
-      var targetX=Math.round(g.median/10)*10;
-      g.ids.forEach(function(id){S.people[id].x=targetX;});
+    // Build set of "rigid float" nodes — couples with no parents whose partner has siblings
+    var rigidFloats=new Set();
+    S.connections.forEach(function(c){
+      if(c.type!=='pareja')return;
+      var aHasPar=S.connections.some(function(x){return x.type==='padre'&&x.to===c.from;});
+      var bHasPar=S.connections.some(function(x){return x.type==='padre'&&x.to===c.to;});
+      if(aHasPar===bHasPar)return;
+      var floatId=aHasPar?c.to:c.from;
+      var anchorId=aHasPar?c.from:c.to;
+      var anchorHasSib=S.connections.some(function(x){
+        return x.type==='hermano'&&(x.from===anchorId||x.to===anchorId);
+      });
+      if(anchorHasSib)rigidFloats.add(floatId);
     });
+
+    xGroups.forEach(function(g){
+      if(g.ids.length<2)return;
+      var targetX=Math.round(g.median/10)*10;
+      g.ids.forEach(function(id){
+        if(rigidFloats.has(id))return; // skip rigid floats — gap preserved separately
+        S.people[id].x=targetX;
+      });
+    });
+
+
   }
 
-  // Re-center children under their parents (same as real-time drag)
+  // Re-center children
   if(!onlyIds){
     var allIds=Object.keys(S.people);
     var rootIds=allIds.filter(function(id){
@@ -1856,6 +1897,26 @@ function autoLayout(){
     }
   });
 
+  // Save original X positions before any changes
+  var origX={};
+  ids.forEach(function(id){origX[id]=S.people[id].x||0;});
+
+  // Initialize rigid offsets for qualifying couples from original positions
+  S.connections.forEach(function(c){
+    if(c.type!=='pareja')return;
+    var aHasPar=Par[c.from]&&Par[c.from].length>0;
+    var bHasPar=Par[c.to]&&Par[c.to].length>0;
+    if(aHasPar===bHasPar)return; // both or neither have parents - skip
+    var anchorId=aHasPar?c.from:c.to;
+    var floatId=aHasPar?c.to:c.from;
+    var anchorHasSib=S.connections.some(function(x){
+      return x.type==='hermano'&&(x.from===anchorId||x.to===anchorId);
+    });
+    if(!anchorHasSib)return;
+    var key='_roff_'+[anchorId,floatId].sort().join('|');
+    S[key]=(origX[floatId]||0)-(origX[anchorId]||0);
+  });
+
   // Assign generations
   var gen={};
   ids.forEach(function(id){gen[id]=0;});
@@ -1945,9 +2006,9 @@ function autoLayout(){
   // Centering passes: bottom-up and top-down
   // Helper: resolve overlaps in genOrder (never swap nodes)
   function resolveOrder(g){
+    // genOrder is IMMUTABLE — never re-sort it.
+    // Just enforce minimum spacing between nodes in locked order.
     var ord=genOrder[g];
-    // Sort by current posX but keep the locked sequence
-    ord.sort(function(a,b){return posX[a]-posX[b];});
     for(var i=1;i<ord.length;i++){
       var need=posX[ord[i-1]]+CW+GAP;
       if(posX[ord[i]]<need)posX[ord[i]]=need;
@@ -2044,7 +2105,7 @@ window.addEventListener('mousemove',e=>{if(S.draggingCard){const p=S.people[S.dr
 window.addEventListener('mouseup',e=>{if(S.draggingCard){persist();S.draggingCard=null;S.dragOffset=null;}if(S.wiringFrom){document.body.classList.remove('wiring');document.querySelectorAll('.card').forEach(c=>c.classList.remove('drop-target','wiring-source'));document.body.classList.remove('wiring-from-top','wiring-from-bottom','wiring-from-side');document.getElementById('wire-svg').innerHTML='';var _portEl=e.target.closest?e.target.closest('.port'):null;var _cardEl=e.target.closest?e.target.closest('.card'):null;var _toIdFromEl=_portEl?_portEl.dataset.id:(_cardEl?_cardEl.dataset.id:null);const _toId=(_toIdFromEl&&_toIdFromEl!==S.wiringFrom.id)?_toIdFromEl:S.wiringTo;const _fromId=S.wiringFrom.id;S.wiringFrom=null;S.wiringTo=null;if(_toId)openRelModal(_fromId,_toId);else S.wiringFromPort=null;}if(S.marquee){const mx=Math.min(S.marquee.x0,S.marquee.x1),my=Math.min(S.marquee.y0,S.marquee.y1);const mw=Math.abs(S.marquee.x1-S.marquee.x0),mh=Math.abs(S.marquee.y1-S.marquee.y0);const cx0=(mx-S.panX)/S.zoom,cy0=(my-S.panY)/S.zoom,cx1=(mx+mw-S.panX)/S.zoom,cy1=(my+mh-S.panY)/S.zoom;S.selectedIds.clear();if(mw>4||mh>4){document.querySelectorAll('.card').forEach(c=>{const p=S.people[c.dataset.id];if(!p)return;const inside=p.x+175>cx0&&p.x<cx1&&p.y+110>cy0&&p.y<cy1;c.classList.toggle('selected',inside);c.classList.remove('in-selection');if(inside)S.selectedIds.add(c.dataset.id);});if(S.selectedIds.size>0)S.selectedId=[...S.selectedIds][0];S._justMarqueed=true;}else{document.querySelectorAll('.card').forEach(c=>c.classList.remove('selected','in-selection'));S.selectedId=null;S.selectedIds.clear();}document.getElementById('marquee').style.display='none';cwEl.classList.remove('marquee-mode');S.marquee=null;}if(S.panning){S.panning=false;cwEl.classList.remove('panning');}document.body.classList.remove('no-select');});
 cwEl.addEventListener('wheel',e=>{e.preventDefault();const d=e.deltaY>0?-.1:.1;const nz=Math.max(.2,Math.min(2.5,S.zoom+d));const r=cwEl.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;S.panX=mx-(mx-S.panX)*(nz/S.zoom);S.panY=my-(my-S.panY)*(nz/S.zoom);S.zoom=nz;applyTransform();},{passive:false});
 cwEl.addEventListener('auxclick',e=>{e.preventDefault();});
-cwEl.addEventListener('click',e=>{if(S._justMarqueed){S._justMarqueed=false;return;}if(!e.target.closest('.card')&&!e.target.dataset.connIdx){S.selectedId=null;S.selectedIds.clear();document.querySelectorAll('.card').forEach(c=>c.classList.remove('selected'));}});
+cwEl.addEventListener('click',e=>{if(S._justMarqueed){S._justMarqueed=false;return;}if(!e.target.closest('.card')&&!e.target.dataset.connIdx){S.selectedId=null;S.selectedIds.clear();document.querySelectorAll('.card').forEach(c=>c.classList.remove('selected'));closePanel();}});
 cwEl.addEventListener('dblclick',e=>{if(e.target.closest('.card')||e.target.closest('.port')||e.target.closest('.tbtn')||e.target.closest('.zbt'))return;const r=cwEl.getBoundingClientRect();S._newNodeX=(e.clientX-r.left-S.panX)/S.zoom-87;S._newNodeY=(e.clientY-r.top-S.panY)/S.zoom-50;openAddPanel();});
 
 function findCardUnderMouse(mx,my){
