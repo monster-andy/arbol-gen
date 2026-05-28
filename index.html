@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Árbol Genealógico v1.50 - 2025 -->
+<!-- Árbol Genealógico v1.52 - 2025 -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -381,7 +381,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
       <span class="logo-top">Árbol</span>
       <span class="logo-bottom"> Genealógico</span>
     </div>
-    <span style="font-size:9px;opacity:0.4;font-family:'Lato',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--cream);margin-left:4px;align-self:flex-end;padding-bottom:2px">v1.50</span>
+    <span style="font-size:9px;opacity:0.4;font-family:'Lato',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--cream);margin-left:4px;align-self:flex-end;padding-bottom:2px">v1.52</span>
   </div>
   <div class="hbtns">
     <button class="lang-btn" id="lang-btn" onclick="toggleLang()" ontouchstart="toggleLang();event.preventDefault()" title="Idioma / Language">
@@ -422,7 +422,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--leaf);flex-shrink:0"></div><span style="font-size:10px;color:#888">↑ padre / ↓ hijo</span></div>
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--gold);flex-shrink:0"></div><span style="font-size:10px;color:#888">← → pareja / hermano</span></div>
       <div class="legend-row" style="color:#aaa;font-size:10px">2× clic: editar</div>
-      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.50</div>
+      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.52</div>
     </div>
 
     <div class="zbts">
@@ -562,7 +562,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
 <input type="file" id="imp-file" accept=".json" style="display:none" onchange="handleImport(event)">
 <input type="file" id="photo-file" accept="image/*" style="display:none" onchange="handlePhoto(event)">
 
-<script>/* Árbol Genealógico v1.50 - 2025 */
+<script>/* Árbol Genealógico v1.52 - 2025 */
 
 const uid=()=>'p'+(S.nextId++);
 const initials=n=>n.trim().split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
@@ -1389,6 +1389,36 @@ function confirmRel(){
     }
   }
 
+  // When a second padre connection is added to a child: check if both parents
+  // should be connected as pareja
+  if(type==='padre'){
+    var childId2=to;
+    // Find all parents of this child
+    var allPars=S.connections.filter(function(c){
+      return c.type==='padre'&&c.to===childId2;
+    }).map(function(c){return c.from;});
+    if(allPars.length===2){
+      var p1=allPars[0],p2=allPars[1];
+      // Check they're not already connected as pareja
+      var alreadyCouple=S.connections.some(function(c){
+        return c.type==='pareja'&&((c.from===p1&&c.to===p2)||(c.from===p2&&c.to===p1));
+      });
+      if(!alreadyCouple){
+        var n1=fullName(S.people[p1])||'?';
+        var n2=fullName(S.people[p2])||'?';
+        S._pendingCouple={p1:p1,p2:p2};
+        // Reuse hermano modal with custom text
+        document.getElementById('hermano-q-text').textContent=
+          '"'+n1+'" y "'+n2+'" ¿son pareja?';
+        document.getElementById('hermano-modal').classList.add('open');
+        // Override confirm/cancel for this case
+        S._pendingCoupleMode=true;
+        S.relFrom=null;S.relTo=null;S.wiringFromPort=null;
+        return;
+      }
+    }
+  }
+
   // Auto-position couple on correct side relative to hermanos
   if(type==='pareja'){
     var mainId=from, partnerId=to;
@@ -1425,6 +1455,17 @@ function confirmRel(){
 }
 function confirmHermanoParents(){
   document.getElementById('hermano-modal').classList.remove('open');
+  // Handle couple confirmation mode
+  if(S._pendingCoupleMode){
+    S._pendingCoupleMode=false;
+    var pc=S._pendingCouple;S._pendingCouple=null;
+    if(pc){
+      S.connections.push({from:pc.p1,to:pc.p2,type:'pareja'});
+      persist();renderAll();renderConns();
+      toast(t('linkCreated'));
+    }
+    return;
+  }
   var info=S._pendingHermano; S._pendingHermano=null;
   if(!info) return;
   info.parents.forEach(function(pid){
@@ -1436,6 +1477,7 @@ function confirmHermanoParents(){
 }
 function cancelHermanoParents(){
   document.getElementById('hermano-modal').classList.remove('open');
+  S._pendingCoupleMode=false;S._pendingCouple=null;
   var info=S._pendingHermano; S._pendingHermano=null;
   if(info) openDetailPanel(info.relFrom||info.child);
   toast(t('linkCreated'));
@@ -1559,7 +1601,7 @@ function copyTree(){
 
   var data=JSON.stringify({
     people:people, connections:connections, nextId:S.nextId,
-    collapsed:collapsed, _v:'arbol-genealogico-v1.50', _ts:Date.now(),
+    collapsed:collapsed, _v:'arbol-genealogico-v1.52', _ts:Date.now(),
     _partial:!copyAll, _count:ids.length
   });
 
@@ -2124,8 +2166,10 @@ function autoLayout(){
     S.people[id].x=Math.max(0,posX[id]||PAD);
   });
 
-  // Recenter children
+  // Recenter children — multiple passes to propagate through chains
   var rootIds=ids.filter(function(id){return Par[id].length===0;});
+  recenterChildren(rootIds);
+  recenterChildren(rootIds);
   recenterChildren(rootIds);
 
   // Final overlap resolution — use locked order
