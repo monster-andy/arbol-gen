@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Árbol Genealógico v1.32 - 2025 -->
+<!-- Árbol Genealógico v1.33 - 2025 -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -381,7 +381,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
       <span class="logo-top">Árbol</span>
       <span class="logo-bottom"> Genealógico</span>
     </div>
-    <span style="font-size:9px;opacity:0.4;font-family:'Lato',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--cream);margin-left:4px;align-self:flex-end;padding-bottom:2px">v1.32</span>
+    <span style="font-size:9px;opacity:0.4;font-family:'Lato',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--cream);margin-left:4px;align-self:flex-end;padding-bottom:2px">v1.33</span>
   </div>
   <div class="hbtns">
     <button class="lang-btn" id="lang-btn" onclick="toggleLang()" ontouchstart="toggleLang();event.preventDefault()" title="Idioma / Language">
@@ -422,7 +422,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--leaf);flex-shrink:0"></div><span style="font-size:10px;color:#888">↑ padre / ↓ hijo</span></div>
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--gold);flex-shrink:0"></div><span style="font-size:10px;color:#888">← → pareja / hermano</span></div>
       <div class="legend-row" style="color:#aaa;font-size:10px">2× clic: editar</div>
-      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.31</div>
+      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.33</div>
     </div>
 
     <div class="zbts">
@@ -562,7 +562,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
 <input type="file" id="imp-file" accept=".json" style="display:none" onchange="handleImport(event)">
 <input type="file" id="photo-file" accept="image/*" style="display:none" onchange="handlePhoto(event)">
 
-<script>/* Árbol Genealógico v1.31 - 2025 */
+<script>/* Árbol Genealógico v1.33 - 2025 */
 
 const uid=()=>'p'+(S.nextId++);
 const initials=n=>n.trim().split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
@@ -698,6 +698,14 @@ function onCardMD(e){
   e.stopPropagation();
   const id=drag.dataset.drag;
   S.draggingCard=id;S.didDrag=false;
+  S.connections.forEach(function(c){
+    if(c.type!=='pareja')return;
+    var cpId=c.from===id?c.to:c.to===id?c.from:null;if(!cpId)return;
+    if(S.connections.some(function(x){return x.type==='padre'&&x.to===cpId;}))return;
+    if(!S.connections.some(function(x){return x.type==='hermano'&&(x.from===id||x.to===id);}))return;
+    var cp=S.people[cpId],p=S.people[id];if(!cp||!p)return;
+    S['_roff_'+[id,cpId].sort().join('|')]=(cp.x||0)-(p.x||0);
+  });
   const p=S.people[id];
   const wx=(e.clientX-S.panX)/S.zoom,wy=(e.clientY-S.panY)/S.zoom;
   S.dragOffset={x:wx-(p.x||0),y:wy-(p.y||0)};
@@ -1538,7 +1546,7 @@ function copyTree(){
 
   var data=JSON.stringify({
     people:people, connections:connections, nextId:S.nextId,
-    collapsed:collapsed, _v:'arbol-genealogico-v1.31', _ts:Date.now(),
+    collapsed:collapsed, _v:'arbol-genealogico-v1.33', _ts:Date.now(),
     _partial:!copyAll, _count:ids.length
   });
 
@@ -1739,6 +1747,29 @@ function snapToGrid(onlyIds, yOnly){
   if(!onlyIds)toast('⊹ Nodos alineados');
 }
 
+function followRigidCouple(anchorId){
+  S.connections.forEach(function(c){
+    if(c.type!=='pareja')return;
+    var cpId=c.from===anchorId?c.to:c.to===anchorId?c.from:null;
+    if(!cpId)return;
+    var cp=S.people[cpId];if(!cp)return;
+    // Only follow if: couple has NO parents AND anchor HAS hermanos
+    var cpHasPar=S.connections.some(function(x){return x.type==='padre'&&x.to===cpId;});
+    if(cpHasPar)return;
+    var anchorHasSib=S.connections.some(function(x){
+      return x.type==='hermano'&&(x.from===anchorId||x.to===anchorId);
+    });
+    if(!anchorHasSib)return;
+    var anchor=S.people[anchorId];if(!anchor)return;
+    var key='_roff_'+[anchorId,cpId].sort().join('|');
+    if(S[key]===undefined)S[key]=(cp.x||0)-(anchor.x||0);
+    cp.x=(anchor.x||0)+S[key];
+    cp.y=anchor.y||0;
+    var el=document.querySelector('[data-id="'+cpId+'"]');
+    if(el){el.style.left=cp.x+'px';el.style.top=cp.y+'px';}
+  });
+}
+
 function recenterChildren(movedIds){
   var CW=220, GAP=60;
   var visited=new Set();
@@ -1795,6 +1826,7 @@ function recenterChildren(movedIds){
         child.x=newX;
         var el=document.querySelector('[data-id="'+childId+'"]');
         if(el)el.style.left=newX+'px';
+        followRigidCouple(childId);
       });
 
       // Recurse into each child's children
@@ -1802,7 +1834,7 @@ function recenterChildren(movedIds){
     });
   }
 
-  movedIds.forEach(function(id){centerKids(id);});
+  movedIds.forEach(function(id){followRigidCouple(id);centerKids(id);});
 }
 
 function autoLayout(){
