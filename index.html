@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Árbol Genealógico v1.40 - 2025 -->
+<!-- Árbol Genealógico v1.43 - 2025 -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -381,7 +381,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
       <span class="logo-top">Árbol</span>
       <span class="logo-bottom"> Genealógico</span>
     </div>
-    <span style="font-size:9px;opacity:0.4;font-family:'Lato',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--cream);margin-left:4px;align-self:flex-end;padding-bottom:2px">v1.40</span>
+    <span style="font-size:9px;opacity:0.4;font-family:'Lato',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--cream);margin-left:4px;align-self:flex-end;padding-bottom:2px">v1.43</span>
   </div>
   <div class="hbtns">
     <button class="lang-btn" id="lang-btn" onclick="toggleLang()" ontouchstart="toggleLang();event.preventDefault()" title="Idioma / Language">
@@ -422,7 +422,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--leaf);flex-shrink:0"></div><span style="font-size:10px;color:#888">↑ padre / ↓ hijo</span></div>
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--gold);flex-shrink:0"></div><span style="font-size:10px;color:#888">← → pareja / hermano</span></div>
       <div class="legend-row" style="color:#aaa;font-size:10px">2× clic: editar</div>
-      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.40</div>
+      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.43</div>
     </div>
 
     <div class="zbts">
@@ -562,7 +562,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
 <input type="file" id="imp-file" accept=".json" style="display:none" onchange="handleImport(event)">
 <input type="file" id="photo-file" accept="image/*" style="display:none" onchange="handlePhoto(event)">
 
-<script>/* Árbol Genealógico v1.40 - 2025 */
+<script>/* Árbol Genealógico v1.43 - 2025 */
 
 const uid=()=>'p'+(S.nextId++);
 const initials=n=>n.trim().split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
@@ -1552,7 +1552,7 @@ function copyTree(){
 
   var data=JSON.stringify({
     people:people, connections:connections, nextId:S.nextId,
-    collapsed:collapsed, _v:'arbol-genealogico-v1.40', _ts:Date.now(),
+    collapsed:collapsed, _v:'arbol-genealogico-v1.43', _ts:Date.now(),
     _partial:!copyAll, _count:ids.length
   });
 
@@ -1917,24 +1917,29 @@ function autoLayout(){
     S[key]=(origX[floatId]||0)-(origX[anchorId]||0);
   });
 
-  // Assign generations
+  // Assign generations using current Y positions as starting point.
+  // This preserves existing row alignment — nodes already placed keep their row.
+  // New nodes (y=0 or near default) get calculated from their connections.
   var gen={};
-  ids.forEach(function(id){gen[id]=0;});
-  var roots=ids.filter(function(id){return Par[id].length===0;});
-  if(!roots.length)roots=[ids[0]];
-  var q=roots.slice(),vis=new Set(roots);
-  while(q.length){
-    var cur=q.shift();
-    Ch[cur].forEach(function(cid){
-      if(gen[cid]<=gen[cur])gen[cid]=gen[cur]+1;
-      if(!vis.has(cid)){vis.add(cid);q.push(cid);}
-    });
-  }
-  ids.forEach(function(id){if(!vis.has(id))gen[id]=0;});
-  for(var ri=0;ri<30;ri++){
+
+  // Step 1: assign gen from current Y position (row = round(y / ROWY))
+  // This anchors existing nodes to their visual rows.
+  ids.forEach(function(id){
+    var y=S.people[id].y||0;
+    gen[id]=Math.round(y/ROWY);
+  });
+
+  // Step 2: iteratively fix violations — children must be below parents,
+  // couples must be same row. Only push DOWN (increase gen), never up.
+  for(var ri=0;ri<40;ri++){
     ids.forEach(function(id){
-      Par[id].forEach(function(pid){if(gen[id]<=gen[pid])gen[id]=gen[pid]+1;});
-      Coup[id].forEach(function(pid){var mx=Math.max(gen[id],gen[pid]);gen[id]=mx;gen[pid]=mx;});
+      Par[id].forEach(function(pid){
+        if(gen[id]<=gen[pid])gen[id]=gen[pid]+1;
+      });
+      Coup[id].forEach(function(pid){
+        var mx=Math.max(gen[id],gen[pid]);
+        gen[id]=mx;gen[pid]=mx;
+      });
     });
   }
 
