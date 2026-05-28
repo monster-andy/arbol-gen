@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Árbol Genealógico v1.48 - 2025 -->
+<!-- Árbol Genealógico v1.50 - 2025 -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -381,7 +381,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
       <span class="logo-top">Árbol</span>
       <span class="logo-bottom"> Genealógico</span>
     </div>
-    <span style="font-size:9px;opacity:0.4;font-family:'Lato',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--cream);margin-left:4px;align-self:flex-end;padding-bottom:2px">v1.48</span>
+    <span style="font-size:9px;opacity:0.4;font-family:'Lato',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--cream);margin-left:4px;align-self:flex-end;padding-bottom:2px">v1.50</span>
   </div>
   <div class="hbtns">
     <button class="lang-btn" id="lang-btn" onclick="toggleLang()" ontouchstart="toggleLang();event.preventDefault()" title="Idioma / Language">
@@ -422,7 +422,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--leaf);flex-shrink:0"></div><span style="font-size:10px;color:#888">↑ padre / ↓ hijo</span></div>
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--gold);flex-shrink:0"></div><span style="font-size:10px;color:#888">← → pareja / hermano</span></div>
       <div class="legend-row" style="color:#aaa;font-size:10px">2× clic: editar</div>
-      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.48</div>
+      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.50</div>
     </div>
 
     <div class="zbts">
@@ -562,7 +562,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
 <input type="file" id="imp-file" accept=".json" style="display:none" onchange="handleImport(event)">
 <input type="file" id="photo-file" accept="image/*" style="display:none" onchange="handlePhoto(event)">
 
-<script>/* Árbol Genealógico v1.48 - 2025 */
+<script>/* Árbol Genealógico v1.50 - 2025 */
 
 const uid=()=>'p'+(S.nextId++);
 const initials=n=>n.trim().split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
@@ -1559,7 +1559,7 @@ function copyTree(){
 
   var data=JSON.stringify({
     people:people, connections:connections, nextId:S.nextId,
-    collapsed:collapsed, _v:'arbol-genealogico-v1.48', _ts:Date.now(),
+    collapsed:collapsed, _v:'arbol-genealogico-v1.50', _ts:Date.now(),
     _partial:!copyAll, _count:ids.length
   });
 
@@ -1925,7 +1925,6 @@ function autoLayout(){
   });
 
   // Assign generations
-  // Step 1: standard BFS top-down
   var gen={};
   ids.forEach(function(id){gen[id]=0;});
   var roots=ids.filter(function(id){return Par[id].length===0;});
@@ -1939,58 +1938,56 @@ function autoLayout(){
     });
   }
   ids.forEach(function(id){if(!vis.has(id))gen[id]=0;});
-  for(var ri=0;ri<30;ri++){
+  // Iterative: children below parents, couples same gen, siblings same gen
+  // parents of same-gen nodes pushed to same gen (only downward)
+  for(var ri=0;ri<60;ri++){
+    // 1. Children must be below all parents
     ids.forEach(function(id){
-      Par[id].forEach(function(pid){if(gen[id]<=gen[pid])gen[id]=gen[pid]+1;});
-      Coup[id].forEach(function(pid){var mx=Math.max(gen[id],gen[pid]);gen[id]=mx;gen[pid]=mx;});
+      Par[id].forEach(function(pid){
+        if(gen[id]<=gen[pid])gen[id]=gen[pid]+1;
+      });
     });
-  }
-
-  // Step 2: compute depths in both directions
-  var allByGen={};
-  ids.forEach(function(id){var g=gen[id];if(!allByGen[g])allByGen[g]=[];allByGen[g].push(id);});
-  var maxG=Math.max.apply(null,ids.map(function(id){return gen[id];}));
-
-  // depthBelow[id] = max levels of descendants below this node
-  var depthBelow={};
-  ids.forEach(function(id){depthBelow[id]=0;});
-  for(var g=maxG;g>=0;g--){
-    (allByGen[g]||[]).forEach(function(id){
-      var cd=Ch[id].map(function(c){return 1+depthBelow[c];});
-      depthBelow[id]=cd.length?Math.max.apply(null,cd):0;
-    });
-  }
-
-  // depthAbove[id] = max levels of ancestors above this node
-  var depthAbove={};
-  ids.forEach(function(id){depthAbove[id]=0;});
-  for(var g=0;g<=maxG;g++){
-    (allByGen[g]||[]).forEach(function(id){
-      var pd=Par[id].map(function(p){return 1+depthAbove[p];});
-      depthAbove[id]=pd.length?Math.max.apply(null,pd):0;
-    });
-  }
-
-  // Step 3a: align ROOTS (no parents) by depth below — same as before
-  ids.forEach(function(id){
-    if(Par[id].length>0)return;
-    gen[id]=maxG-depthBelow[id];
-  });
-
-  // Step 3b: align LEAVES (no children) by depth above — mirror of roots
-  ids.forEach(function(id){
-    if(Ch[id].length>0)return;
-    gen[id]=depthAbove[id];
-  });
-
-  // Step 4: re-sync everything
-  for(var ri2=0;ri2<30;ri2++){
+    // 2. Couples same gen (push down only)
     ids.forEach(function(id){
-      Par[id].forEach(function(pid){if(gen[id]<=gen[pid])gen[id]=gen[pid]+1;});
-      Coup[id].forEach(function(pid){var mx=Math.max(gen[id],gen[pid]);gen[id]=mx;gen[pid]=mx;});
+      Coup[id].forEach(function(pid){
+        var mx=Math.max(gen[id],gen[pid]);
+        gen[id]=mx;gen[pid]=mx;
+      });
+    });
+    // 3. Siblings same gen (push down only)
+    var sibGroups={};
+    ids.forEach(function(id){
+      if(!Par[id].length)return;
+      var k=Par[id].slice().sort().join('|');
+      if(!sibGroups[k])sibGroups[k]=[];
+      sibGroups[k].push(id);
+    });
+    Object.values(sibGroups).forEach(function(sibs){
+      var mx=Math.max.apply(null,sibs.map(function(s){return gen[s];}));
+      sibs.forEach(function(s){gen[s]=mx;});
+    });
+    // 4. Parents of nodes in the same gen → push to same gen (push down only)
+    var byGenNow={};
+    ids.forEach(function(id){
+      if(!byGenNow[gen[id]])byGenNow[gen[id]]=[];
+      byGenNow[gen[id]].push(id);
+    });
+    Object.keys(byGenNow).forEach(function(g){
+      // Collect parents of all nodes in this gen that HAVE parents
+      var pars=[];
+      byGenNow[g].forEach(function(id){
+        Par[id].forEach(function(pid){if(!pars.includes(pid))pars.push(pid);});
+      });
+      if(pars.length<2)return;
+      // Push all parents to the MAX gen among them (only down, never up)
+      var mx=Math.max.apply(null,pars.map(function(p){return gen[p];}));
+      pars.forEach(function(p){
+        if(gen[p]<mx)gen[p]=mx;
+        // Sync couple too
+        Coup[p].forEach(function(cp){if(gen[cp]<mx)gen[cp]=mx;});
+      });
     });
   }
-
 
   // Group by generation
   var byGen={};
