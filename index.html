@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Árbol Genealógico v1.54 - 2025 -->
+<!-- Árbol Genealógico v1.56 - 2025 -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -381,7 +381,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
       <span class="logo-top">Árbol</span>
       <span class="logo-bottom"> Genealógico</span>
     </div>
-    <span style="font-size:9px;opacity:0.4;font-family:'Lato',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--cream);margin-left:4px;align-self:flex-end;padding-bottom:2px">v1.54</span>
+    <span style="font-size:9px;opacity:0.4;font-family:'Lato',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--cream);margin-left:4px;align-self:flex-end;padding-bottom:2px">v1.56</span>
   </div>
   <div class="hbtns">
     <button class="lang-btn" id="lang-btn" onclick="toggleLang()" ontouchstart="toggleLang();event.preventDefault()" title="Idioma / Language">
@@ -422,7 +422,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--leaf);flex-shrink:0"></div><span style="font-size:10px;color:#888">↑ padre / ↓ hijo</span></div>
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--gold);flex-shrink:0"></div><span style="font-size:10px;color:#888">← → pareja / hermano</span></div>
       <div class="legend-row" style="color:#aaa;font-size:10px">2× clic: editar</div>
-      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.54</div>
+      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.56</div>
     </div>
 
     <div class="zbts">
@@ -562,7 +562,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
 <input type="file" id="imp-file" accept=".json" style="display:none" onchange="handleImport(event)">
 <input type="file" id="photo-file" accept="image/*" style="display:none" onchange="handlePhoto(event)">
 
-<script>/* Árbol Genealógico v1.54 - 2025 */
+<script>/* Árbol Genealógico v1.56 - 2025 */
 
 const uid=()=>'p'+(S.nextId++);
 const initials=n=>n.trim().split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
@@ -1601,7 +1601,7 @@ function copyTree(){
 
   var data=JSON.stringify({
     people:people, connections:connections, nextId:S.nextId,
-    collapsed:collapsed, _v:'arbol-genealogico-v1.54', _ts:Date.now(),
+    collapsed:collapsed, _v:'arbol-genealogico-v1.56', _ts:Date.now(),
     _partial:!copyAll, _count:ids.length
   });
 
@@ -2168,9 +2168,7 @@ function autoLayout(){
 
   // Recenter children — multiple passes to propagate through chains
   var rootIds=ids.filter(function(id){return Par[id].length===0;});
-  recenterChildren(rootIds);
-  recenterChildren(rootIds);
-  recenterChildren(rootIds);
+  for(var rp=0;rp<6;rp++) recenterChildren(rootIds);
 
   // Final overlap resolution — use locked order
   gens.forEach(function(g){
@@ -2196,38 +2194,71 @@ function autoLayout(){
   // For each generation, if any two nodes overlap, push the RIGHT one's
   // entire subtree rightward until no overlap.
   function getSubtree(id){
+    // Only descendants (children/grandchildren), NOT couples
+    // Couples connect different trees and must not be dragged along
     var sub=new Set([id]);
     var q=[id];
     while(q.length){
       var cur=q.shift();
       Ch[cur].forEach(function(c){if(!sub.has(c)){sub.add(c);q.push(c);}});
-      // Also include couple
-      Coup[cur].forEach(function(c){if(!sub.has(c)){sub.add(c);q.push(c);}});
     }
     return sub;
   }
+  // Resolve overlaps by moving root groups (gen=0) left/right
+  // then recenterChildren propagates the shift to all descendants
   for(var ovPass=0;ovPass<10;ovPass++){
-    var moved=false;
+    var anyOverlap=false;
+    // Find deepest generation with overlaps
     gens.forEach(function(g){
       var gnodes=(byGen[g]||[]).filter(function(id){return !looseSet.has(id);});
       gnodes.sort(function(a,b){return (S.people[a].x||0)-(S.people[b].x||0);});
       for(var i=1;i<gnodes.length;i++){
-        var left=gnodes[i-1],right=gnodes[i];
-        var lx=(S.people[left].x||0),rx=(S.people[right].x||0);
-        var overlap=lx+CW+GAP-rx;
-        if(overlap>1){
-          // Push right node's entire subtree rightward
-          var sub=getSubtree(right);
-          // Also push all nodes to the right of this node in this gen
-          gnodes.slice(i).forEach(function(n){sub.add(n);});
-          sub.forEach(function(sid){
-            if(S.people[sid])S.people[sid].x=(S.people[sid].x||0)+overlap;
-          });
-          moved=true;
+        var lx=(S.people[gnodes[i-1]].x||0);
+        var rx=(S.people[gnodes[i]].x||0);
+        var MINGAP=GAP*2; // double gap for overlap detection = more breathing room
+        var overlap=lx+CW+MINGAP-rx;
+        if(overlap>0){
+          anyOverlap=true;
+          // Find root ancestor of right node and push it right
+          // Find root ancestor of left node and push it left
+          function getRootAnc(id){
+            var visited=new Set();
+            var cur=id;
+            while(Par[cur]&&Par[cur].length>0&&!visited.has(cur)){
+              visited.add(cur);
+              cur=Par[cur][0];
+            }
+            return cur;
+          }
+          var rootRight=getRootAnc(gnodes[i]);
+          var rootLeft=getRootAnc(gnodes[i-1]);
+          var half=Math.ceil(overlap/2);
+          if(rootRight!==rootLeft){
+            // Push right root right, left root left
+            S.people[rootRight].x=(S.people[rootRight].x||0)+half;
+            S.people[rootLeft].x=(S.people[rootLeft].x||0)-half;
+            // Also move their couples
+            S.connections.forEach(function(c){
+              if(c.type!=='pareja')return;
+              if(c.from===rootRight||c.to===rootRight){
+                var cp=c.from===rootRight?c.to:c.from;
+                S.people[cp].x=(S.people[cp].x||0)+half;
+              }
+              if(c.from===rootLeft||c.to===rootLeft){
+                var cp2=c.from===rootLeft?c.to:c.from;
+                S.people[cp2].x=(S.people[cp2].x||0)-half;
+              }
+            });
+          } else {
+            // Same root — push right node right
+            S.people[gnodes[i]].x=rx+overlap;
+          }
         }
       }
     });
-    if(!moved)break;
+    if(!anyOverlap)break;
+    // Re-center children after moving roots
+    recenterChildren(rootIds);
   }
 
   renderAll();
