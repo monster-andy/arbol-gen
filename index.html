@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Árbol Genealógico v1.31 - 2025 -->
+<!-- Árbol Genealógico v1.32 - 2025 -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -381,7 +381,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
       <span class="logo-top">Árbol</span>
       <span class="logo-bottom"> Genealógico</span>
     </div>
-    <span style="font-size:9px;opacity:0.4;font-family:'Lato',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--cream);margin-left:4px;align-self:flex-end;padding-bottom:2px">v1.31</span>
+    <span style="font-size:9px;opacity:0.4;font-family:'Lato',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--cream);margin-left:4px;align-self:flex-end;padding-bottom:2px">v1.32</span>
   </div>
   <div class="hbtns">
     <button class="lang-btn" id="lang-btn" onclick="toggleLang()" ontouchstart="toggleLang();event.preventDefault()" title="Idioma / Language">
@@ -408,7 +408,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
       <button class="tbtn" onclick="snapToGrid()" ontouchstart="snapToGrid();event.preventDefault()">⊹ Alinear</button>
       <button class="tbtn" data-action="fit" onclick="fitScreen()" ontouchstart="fitScreen();event.preventDefault()">⊞ Ajustar</button>
       <button class="tbtn" id="btn-collapse-all" onclick="toggleCollapseAll()" ontouchstart="toggleCollapseAll();event.preventDefault()">▼ Contraer</button>
-      <button class="tbtn" data-action="organize" onclick="confirmOrganize()" ontouchstart="confirmOrganize();event.preventDefault()" style="opacity:0.6">🔀 Organizar</button>
+      <button class="tbtn" data-action="organize" style="opacity:0.6" onclick="confirmOrganize()" ontouchstart="confirmOrganize();event.preventDefault()" style="opacity:0.6">🔀 Organizar</button>
     </div>
 
     <div class="legend">
@@ -868,10 +868,8 @@ function renderConns(){
       // This handles cases where child is not perfectly centered
       const midY = junctionY + (cpt.y - junctionY) * 0.5;
       if(Math.abs(cpt.x - parentMidX) < 3){
-        // Child is centered: straight vertical line
         svg.appendChild(mkLine(parentMidX, junctionY, parentMidX, cpt.y, COL_PADRE, 1.5));
       } else {
-        // Child is offset: go down to midpoint, then across, then down to child
         const path=document.createElementNS('http://www.w3.org/2000/svg','path');
         const d=`M${parentMidX},${junctionY} L${parentMidX},${midY} L${cpt.x},${midY} L${cpt.x},${cpt.y}`;
         path.setAttribute('d',d);path.setAttribute('stroke',COL_PADRE);
@@ -1682,50 +1680,63 @@ function confirmOrganize(){
 }
 
 function snapToGrid(onlyIds, yOnly){
-  // Acomodar: snap nodes to align with nearest neighbors.
-  // If onlyIds is provided, only snap those nodes.
+  // Alinear: move each node the MINIMUM amount to snap to nearest 10px grid.
+  // Groups nodes within TOL px in Y → snaps to median Y.
+  // Groups nodes within TOL px in X → snaps to median X.
+  // Never reorders, never changes gaps — just tiny adjustments.
   var ids=onlyIds?[...onlyIds]:Object.keys(S.people);
   if(!ids.length)return;
-  var TOL=100; // px tolerance for "same row/column"
+  var TOL=4; // only snap nodes within 4px
 
-  // ── Pass 1: snap Y (align nodes in same horizontal band) ──
-  // Group by approximate Y
+  // Snap Y: group by proximity, move to median
   var yGroups=[];
   ids.forEach(function(id){
-    var p=S.people[id]; if(!p)return;
-    var y=p.y||0;
-    var found=false;
+    var p=S.people[id];if(!p)return;
+    var y=p.y||0;var found=false;
     yGroups.forEach(function(g){
-      if(Math.abs(g.median-y)<TOL){g.ids.push(id);g.sum+=y;g.median=g.sum/g.ids.length;found=true;}
+      if(Math.abs(g.median-y)<TOL){
+        g.ids.push(id);g.sum+=y;g.median=g.sum/g.ids.length;found=true;
+      }
     });
     if(!found)yGroups.push({ids:[id],sum:y,median:y});
   });
-  // Snap each group to its median Y
   yGroups.forEach(function(g){
-    var targetY=Math.round(g.median/10)*10; // snap to nearest 10px
+    var targetY=Math.round(g.median/10)*10;
     g.ids.forEach(function(id){S.people[id].y=targetY;});
   });
 
-  // ── Pass 2: snap X (align nodes in same vertical band) ──
+  // X snap: only snap nodes that are within TOL of a vertical alignment
+  // Use a separate (larger) tolerance for vertical grouping
   if(!yOnly){
     var xGroups=[];
     ids.forEach(function(id){
-      var p=S.people[id]; if(!p)return;
-      var x=p.x||0;
-      var found=false;
+      var p=S.people[id];if(!p)return;
+      var x=p.x||0;var found=false;
       xGroups.forEach(function(g){
-        if(Math.abs(g.median-x)<TOL){g.ids.push(id);g.sum+=x;g.median=g.sum/g.ids.length;found=true;}
+        if(Math.abs(g.median-x)<TOL){
+          g.ids.push(id);g.sum+=x;g.median=g.sum/g.ids.length;found=true;
+        }
       });
       if(!found)xGroups.push({ids:[id],sum:x,median:x});
     });
     xGroups.forEach(function(g){
+      if(g.ids.length<2)return; // only snap if 2+ nodes are aligned
       var targetX=Math.round(g.median/10)*10;
       g.ids.forEach(function(id){S.people[id].x=targetX;});
     });
   }
 
-  persist(); renderAll(); renderConns();
-  toast('⊹ Nodos alineados');
+  // Re-center children under their parents (same as real-time drag)
+  if(!onlyIds){
+    var allIds=Object.keys(S.people);
+    var rootIds=allIds.filter(function(id){
+      return !S.connections.some(function(c){return c.type==='padre'&&c.to===id;});
+    });
+    recenterChildren(rootIds);
+  }
+
+  persist();renderAll();renderConns();
+  if(!onlyIds)toast('⊹ Nodos alineados');
 }
 
 function recenterChildren(movedIds){
@@ -1852,19 +1863,32 @@ function autoLayout(){
     }
   });
 
-  // Initial X: respect current left-right ORDER within each generation
-  // Sort each generation by current X position, then space evenly
+  // Sort each generation by current X — record ORDER, never change it
   var posX={};
+  var genOrder={};  // g → ordered array of ids (order locked)
   gens.forEach(function(g){
-    // Sort nodes by their CURRENT x position to preserve order
     var ordered=byGen[g].slice().sort(function(a,b){
       return (S.people[a].x||0)-(S.people[b].x||0);
     });
+    genOrder[g]=ordered;
     var x=PAD;
     ordered.forEach(function(id){posX[id]=x;x+=CW+GAP;});
   });
 
-  // Apply couple gaps BEFORE centering so children center over the correct span
+  // Measure current couple gaps (respect manual positioning)
+  var coupleGap={};
+  S.connections.forEach(function(c){
+    if(c.type!=='pareja')return;
+    var a=S.people[c.from],b=S.people[c.to];
+    if(!a||!b)return;
+    var dist=Math.abs((a.x||0)-(b.x||0));
+    if(dist>CW){
+      var key=[c.from,c.to].sort().join('|');
+      coupleGap[key]=dist;
+    }
+  });
+
+  // Apply couple gaps BEFORE centering
   function applyCoupleGaps(){
     S.connections.forEach(function(c){
       if(c.type!=='pareja')return;
@@ -1876,7 +1900,6 @@ function autoLayout(){
       if(aX<=bX){ posX[c.to]=posX[c.from]+gap; }
       else { posX[c.from]=posX[c.to]+gap; }
     });
-    // Re-resolve overlaps after gap enforcement
     gens.forEach(function(g){
       var sorted=byGen[g].slice().sort(function(a,b){return posX[a]-posX[b];});
       for(var i=1;i<sorted.length;i++){
@@ -1887,12 +1910,20 @@ function autoLayout(){
   }
   applyCoupleGaps();
 
-  // STEP: center each node over its children
-  // Run bottom-up: deepest generation first
-  // For each parent: posX = midpoint of all its children
-  // Then resolve overlaps (push right if needed)
+  // Centering passes: bottom-up and top-down
+  // Helper: resolve overlaps in genOrder (never swap nodes)
+  function resolveOrder(g){
+    var ord=genOrder[g];
+    // Sort by current posX but keep the locked sequence
+    ord.sort(function(a,b){return posX[a]-posX[b];});
+    for(var i=1;i<ord.length;i++){
+      var need=posX[ord[i-1]]+CW+GAP;
+      if(posX[ord[i]]<need)posX[ord[i]]=need;
+    }
+  }
+
   for(var pass=0;pass<15;pass++){
-    // Bottom-up: center parents over children (using card centers)
+    // Bottom-up: center each node over its children
     gens.slice().reverse().forEach(function(g){
       byGen[g].forEach(function(id){
         var ch=Ch[id].filter(function(c){return posX[c]!==undefined;});
@@ -1900,43 +1931,29 @@ function autoLayout(){
         var centers=ch.map(function(c){return posX[c]+CW/2;});
         var minC=Math.min.apply(null,centers);
         var maxC=Math.max.apply(null,centers);
-        var midC=(minC+maxC)/2;
-        posX[id]=midC-CW/2;
+        posX[id]=(minC+maxC)/2-CW/2;
       });
-      // Resolve overlaps: sort by X, push right if too close
-      var sorted=byGen[g].slice().sort(function(a,b){return posX[a]-posX[b];});
-      for(var i=1;i<sorted.length;i++){
-        var need=posX[sorted[i-1]]+CW+GAP;
-        if(posX[sorted[i]]<need)posX[sorted[i]]=need;
-      }
+      resolveOrder(g);
     });
-
-    // Top-down: children center under parents (using card centers)
+    // Top-down: center each node under its parents
     gens.forEach(function(g){
       byGen[g].forEach(function(id){
         var pars=Par[id].filter(function(p){return posX[p]!==undefined;});
         if(!pars.length)return;
-        // Use card centers: posX + CW/2
         var centers=pars.map(function(p){return posX[p]+CW/2;});
         var minC=Math.min.apply(null,centers);
         var maxC=Math.max.apply(null,centers);
-        var midC=(minC+maxC)/2;
-        // Child left edge = midC - CW/2
-        posX[id]=midC-CW/2;
+        posX[id]=(minC+maxC)/2-CW/2;
       });
-      var sorted=byGen[g].slice().sort(function(a,b){return posX[a]-posX[b];});
-      for(var i=1;i<sorted.length;i++){
-        var need=posX[sorted[i-1]]+CW+GAP;
-        if(posX[sorted[i]]<need)posX[sorted[i]]=need;
-      }
+      resolveOrder(g);
     });
   }
 
-  // Normalize: shift so leftmost = PAD
+  // Normalize
   var minX=Math.min.apply(null,ids.map(function(id){return posX[id]||0;}));
   ids.forEach(function(id){posX[id]=(posX[id]||0)+(PAD-minX);});
 
-  // Y: uniform per generation
+  // Y per generation
   var curY=PAD;
   var genY={};
   gens.forEach(function(g){
@@ -1944,15 +1961,14 @@ function autoLayout(){
     curY+=220+ROWY;
   });
 
-  // Apply couple gaps one final time after normalize
   applyCoupleGaps();
 
-  // Identify loose nodes (no connections) — handle Y separately
+  // Identify loose nodes
   var looseSet=new Set(ids.filter(function(id){
     return S.connections.every(function(c){return c.from!==id&&c.to!==id;});
   }));
 
-  // Apply Y positions (generation rows) — skip loose nodes
+  // Apply Y — skip loose nodes
   ids.forEach(function(id){
     if(looseSet.has(id))return;
     S.people[id].y=genY[gen[id]]||PAD;
@@ -1964,27 +1980,36 @@ function autoLayout(){
     S.people[id].x=Math.max(0,posX[id]||PAD);
   });
 
-  // Then re-center all children using the same logic as real-time drag
+  // Recenter children
   var rootIds=ids.filter(function(id){return Par[id].length===0;});
   recenterChildren(rootIds);
 
-  // Handle loose nodes (no connections at all)
-  // Group them by approximate Y (threshold = 80px)
-  // Within each group: align Y to average, space X by average gap
-  // Loose nodes: just snap them like Alinear does
+  // Final overlap resolution — use locked order
+  gens.forEach(function(g){
+    var gnodes=(genOrder[g]||[]).filter(function(id){return !looseSet.has(id);});
+    gnodes.sort(function(a,b){return (S.people[a].x||0)-(S.people[b].x||0);});
+    for(var i=1;i<gnodes.length;i++){
+      var prev=S.people[gnodes[i-1]],curr=S.people[gnodes[i]];
+      if(!prev||!curr)continue;
+      var need=(prev.x||0)+CW+GAP;
+      if((curr.x||0)<need){
+        var shift=need-(curr.x||0);
+        for(var j=i;j<gnodes.length;j++){
+          S.people[gnodes[j]].x=(S.people[gnodes[j]].x||0)+shift;
+          var el=document.querySelector('[data-id="'+gnodes[j]+'"]');
+          if(el)el.style.left=S.people[gnodes[j]].x+'px';
+        }
+      }
+    }
+  });
+
   // loose nodes: leave untouched
   renderAll();persist();toast(t('organized'));
 }
 
 cwEl.addEventListener('mousedown',e=>{if(e.button===1){e.preventDefault();S.panning=true;S.panStart={x:e.clientX-S.panX,y:e.clientY-S.panY};cwEl.classList.add('panning');document.body.classList.add('no-select');return;}if(e.button===0){if(e.target.closest('.card')||e.target.closest('.port'))return;if(S.wiringFrom)return;e.preventDefault();document.body.classList.add('no-select');const r=cwEl.getBoundingClientRect();const sx=e.clientX-r.left,sy=e.clientY-r.top;S.marquee={x0:sx,y0:sy,x1:sx,y1:sy};const m=document.getElementById('marquee');m.style.display='block';m.style.left=sx+'px';m.style.top=sy+'px';m.style.width='0';m.style.height='0';cwEl.classList.add('marquee-mode');}});
 window.addEventListener('mousemove',e=>{if(S.draggingCard){const p=S.people[S.draggingCard];const nx=(e.clientX-S.panX)/S.zoom-S.dragOffset.x,ny=(e.clientY-S.panY)/S.zoom-S.dragOffset.y;const ddx=nx-(p.x||0),ddy=ny-(p.y||0);if(Math.abs(ddx)>2||Math.abs(ddy)>2)S.didDrag=true;const moveIds=(S.selectedIds.size>1&&S.selectedIds.has(S.draggingCard))?[...S.selectedIds]:[S.draggingCard];moveIds.forEach(id=>{const pp=S.people[id];if(!pp)return;if(id===S.draggingCard){pp.x=nx;pp.y=ny;}else{pp.x=(pp.x||0)+ddx;pp.y=(pp.y||0)+ddy;}const c=document.querySelector('[data-id="'+id+'"]');if(c){c.style.left=pp.x+'px';c.style.top=pp.y+'px';}});recenterChildren(moveIds);renderConns();return;}if(S.wiringFrom){const _r=cwEl.getBoundingClientRect();S.wireMouseX=e.clientX-_r.left;S.wireMouseY=e.clientY-_r.top;const target=findCardUnderMouse(S.wireMouseX,S.wireMouseY);document.querySelectorAll('.card').forEach(c=>c.classList.toggle('drop-target',c.dataset.id===target&&target!==S.wiringFrom.id));S.wiringTo=target&&target!==S.wiringFrom.id?target:null;drawWire();return;}if(S.marquee){const r=cwEl.getBoundingClientRect();S.marquee.x1=e.clientX-r.left;S.marquee.y1=e.clientY-r.top;const mx=Math.min(S.marquee.x0,S.marquee.x1),my=Math.min(S.marquee.y0,S.marquee.y1);const mw=Math.abs(S.marquee.x1-S.marquee.x0),mh=Math.abs(S.marquee.y1-S.marquee.y0);const m=document.getElementById('marquee');m.style.left=mx+'px';m.style.top=my+'px';m.style.width=mw+'px';m.style.height=mh+'px';const cx0=(mx-S.panX)/S.zoom,cy0=(my-S.panY)/S.zoom,cx1=(mx+mw-S.panX)/S.zoom,cy1=(my+mh-S.panY)/S.zoom;document.querySelectorAll('.card').forEach(c=>{const p=S.people[c.dataset.id];if(!p)return;const inside=p.x+175>cx0&&p.x<cx1&&p.y+110>cy0&&p.y<cy1;if(inside){c.classList.add('in-selection');c.classList.remove('selected');}else c.classList.remove('in-selection');});return;}if(S.panning){S.panX=e.clientX-S.panStart.x;S.panY=e.clientY-S.panStart.y;applyTransform();}});
-window.addEventListener('mouseup',e=>{if(S.draggingCard){persist();S.draggingCard=null;S.dragOffset=null;}if(S.wiringFrom){document.body.classList.remove('wiring');document.querySelectorAll('.card').forEach(c=>c.classList.remove('drop-target','wiring-source'));document.body.classList.remove('wiring-from-top','wiring-from-bottom','wiring-from-side');document.getElementById('wire-svg').innerHTML='';
-  // Also check if mouse released on a port — get its card
-  var _portEl=e.target.closest?e.target.closest('.port'):null;
-  var _cardEl=e.target.closest?e.target.closest('.card'):null;
-  var _toIdFromEl=_portEl?_portEl.dataset.id:(_cardEl?_cardEl.dataset.id:null);
-  const _toId=(_toIdFromEl&&_toIdFromEl!==S.wiringFrom.id)?_toIdFromEl:S.wiringTo;
-  const _fromId=S.wiringFrom.id;S.wiringFrom=null;S.wiringTo=null;if(_toId)openRelModal(_fromId,_toId);else S.wiringFromPort=null;}if(S.marquee){const mx=Math.min(S.marquee.x0,S.marquee.x1),my=Math.min(S.marquee.y0,S.marquee.y1);const mw=Math.abs(S.marquee.x1-S.marquee.x0),mh=Math.abs(S.marquee.y1-S.marquee.y0);const cx0=(mx-S.panX)/S.zoom,cy0=(my-S.panY)/S.zoom,cx1=(mx+mw-S.panX)/S.zoom,cy1=(my+mh-S.panY)/S.zoom;S.selectedIds.clear();if(mw>4||mh>4){document.querySelectorAll('.card').forEach(c=>{const p=S.people[c.dataset.id];if(!p)return;const inside=p.x+175>cx0&&p.x<cx1&&p.y+110>cy0&&p.y<cy1;c.classList.toggle('selected',inside);c.classList.remove('in-selection');if(inside)S.selectedIds.add(c.dataset.id);});if(S.selectedIds.size>0)S.selectedId=[...S.selectedIds][0];S._justMarqueed=true;}else{document.querySelectorAll('.card').forEach(c=>c.classList.remove('selected','in-selection'));S.selectedId=null;S.selectedIds.clear();}document.getElementById('marquee').style.display='none';cwEl.classList.remove('marquee-mode');S.marquee=null;}if(S.panning){S.panning=false;cwEl.classList.remove('panning');}document.body.classList.remove('no-select');});
+window.addEventListener('mouseup',e=>{if(S.draggingCard){persist();S.draggingCard=null;S.dragOffset=null;}if(S.wiringFrom){document.body.classList.remove('wiring');document.querySelectorAll('.card').forEach(c=>c.classList.remove('drop-target','wiring-source'));document.body.classList.remove('wiring-from-top','wiring-from-bottom','wiring-from-side');document.getElementById('wire-svg').innerHTML='';var _portEl=e.target.closest?e.target.closest('.port'):null;var _cardEl=e.target.closest?e.target.closest('.card'):null;var _toIdFromEl=_portEl?_portEl.dataset.id:(_cardEl?_cardEl.dataset.id:null);const _toId=(_toIdFromEl&&_toIdFromEl!==S.wiringFrom.id)?_toIdFromEl:S.wiringTo;const _fromId=S.wiringFrom.id;S.wiringFrom=null;S.wiringTo=null;if(_toId)openRelModal(_fromId,_toId);else S.wiringFromPort=null;}if(S.marquee){const mx=Math.min(S.marquee.x0,S.marquee.x1),my=Math.min(S.marquee.y0,S.marquee.y1);const mw=Math.abs(S.marquee.x1-S.marquee.x0),mh=Math.abs(S.marquee.y1-S.marquee.y0);const cx0=(mx-S.panX)/S.zoom,cy0=(my-S.panY)/S.zoom,cx1=(mx+mw-S.panX)/S.zoom,cy1=(my+mh-S.panY)/S.zoom;S.selectedIds.clear();if(mw>4||mh>4){document.querySelectorAll('.card').forEach(c=>{const p=S.people[c.dataset.id];if(!p)return;const inside=p.x+175>cx0&&p.x<cx1&&p.y+110>cy0&&p.y<cy1;c.classList.toggle('selected',inside);c.classList.remove('in-selection');if(inside)S.selectedIds.add(c.dataset.id);});if(S.selectedIds.size>0)S.selectedId=[...S.selectedIds][0];S._justMarqueed=true;}else{document.querySelectorAll('.card').forEach(c=>c.classList.remove('selected','in-selection'));S.selectedId=null;S.selectedIds.clear();}document.getElementById('marquee').style.display='none';cwEl.classList.remove('marquee-mode');S.marquee=null;}if(S.panning){S.panning=false;cwEl.classList.remove('panning');}document.body.classList.remove('no-select');});
 cwEl.addEventListener('wheel',e=>{e.preventDefault();const d=e.deltaY>0?-.1:.1;const nz=Math.max(.2,Math.min(2.5,S.zoom+d));const r=cwEl.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;S.panX=mx-(mx-S.panX)*(nz/S.zoom);S.panY=my-(my-S.panY)*(nz/S.zoom);S.zoom=nz;applyTransform();},{passive:false});
 cwEl.addEventListener('auxclick',e=>{e.preventDefault();});
 cwEl.addEventListener('click',e=>{if(S._justMarqueed){S._justMarqueed=false;return;}if(!e.target.closest('.card')&&!e.target.dataset.connIdx){S.selectedId=null;S.selectedIds.clear();document.querySelectorAll('.card').forEach(c=>c.classList.remove('selected'));}});
@@ -2005,15 +2030,9 @@ document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==='c'&&!e.shiftKey){ copyTree(); e.preventDefault(); return; }
   if((e.ctrlKey||e.metaKey)&&e.key==='v'){ pasteTree(); e.preventDefault(); return; }
   if(e.key==='Delete'||e.key==='Backspace'){
-    if(S.selectedIds.size>1){
-      askDeleteMultiple([...S.selectedIds]);
-    } else if(S.selectedIds.size===1){
-      // Single selection via marquee (selectedId might be null)
-      var sid=[...S.selectedIds][0];
-      if(S.people[sid])askDelete(sid);
-    } else if(S.selectedId&&S.people[S.selectedId]){
-      askDelete(S.selectedId);
-    }
+    if(S.selectedIds.size>1){askDeleteMultiple([...S.selectedIds]);}
+    else if(S.selectedIds.size===1){var sid=[...S.selectedIds][0];if(S.people[sid])askDelete(sid);}
+    else if(S.selectedId&&S.people[S.selectedId]){askDelete(S.selectedId);}
   }
   if(e.key==='Escape'){
     cancelDel();cancelRel();connActionCancel();closePanel();
@@ -2142,13 +2161,6 @@ function applyLangToUI(){
       if(portEl){
         var pid=portEl.dataset.id,pside=portEl.dataset.port;
         S.wiringFrom={id:pid,port:pside};S.wiringFromPort=pside;
-        document.querySelectorAll('.card').forEach(c=>c.classList.remove('wiring-source'));
-        var srcCard=document.querySelector('[data-id="'+pid+'"]');
-        if(srcCard)srcCard.classList.add('wiring-source');
-        document.body.classList.remove('wiring-from-top','wiring-from-bottom','wiring-from-side');
-        if(pside==='t')document.body.classList.add('wiring-from-top');
-        else if(pside==='b')document.body.classList.add('wiring-from-bottom');
-        else document.body.classList.add('wiring-from-side');
         var rr=cwEl.getBoundingClientRect();S.wireMouseX=tt.clientX-rr.left;S.wireMouseY=tt.clientY-rr.top;
         document.body.classList.add('wiring');drawWire();return;
       }
@@ -2237,15 +2249,9 @@ document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==='c'&&!e.shiftKey){ copyTree(); e.preventDefault(); return; }
   if((e.ctrlKey||e.metaKey)&&e.key==='v'){ pasteTree(); e.preventDefault(); return; }
   if(e.key==='Delete'||e.key==='Backspace'){
-    if(S.selectedIds.size>1){
-      askDeleteMultiple([...S.selectedIds]);
-    } else if(S.selectedIds.size===1){
-      // Single selection via marquee (selectedId might be null)
-      var sid=[...S.selectedIds][0];
-      if(S.people[sid])askDelete(sid);
-    } else if(S.selectedId&&S.people[S.selectedId]){
-      askDelete(S.selectedId);
-    }
+    if(S.selectedIds.size>1){askDeleteMultiple([...S.selectedIds]);}
+    else if(S.selectedIds.size===1){var sid=[...S.selectedIds][0];if(S.people[sid])askDelete(sid);}
+    else if(S.selectedId&&S.people[S.selectedId]){askDelete(S.selectedId);}
   }
   if(e.key==='Escape'){cancelDel();cancelRel();connActionCancel();closePanel();
     if(S.marquee){document.getElementById('marquee').style.display='none';cwEl.classList.remove('marquee-mode');S.marquee=null;}
