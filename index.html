@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Árbol Genealógico v1.52 - 2025 -->
+<!-- Árbol Genealógico v1.53 - 2025 -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -381,7 +381,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
       <span class="logo-top">Árbol</span>
       <span class="logo-bottom"> Genealógico</span>
     </div>
-    <span style="font-size:9px;opacity:0.4;font-family:'Lato',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--cream);margin-left:4px;align-self:flex-end;padding-bottom:2px">v1.52</span>
+    <span style="font-size:9px;opacity:0.4;font-family:'Lato',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--cream);margin-left:4px;align-self:flex-end;padding-bottom:2px">v1.53</span>
   </div>
   <div class="hbtns">
     <button class="lang-btn" id="lang-btn" onclick="toggleLang()" ontouchstart="toggleLang();event.preventDefault()" title="Idioma / Language">
@@ -422,7 +422,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--leaf);flex-shrink:0"></div><span style="font-size:10px;color:#888">↑ padre / ↓ hijo</span></div>
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--gold);flex-shrink:0"></div><span style="font-size:10px;color:#888">← → pareja / hermano</span></div>
       <div class="legend-row" style="color:#aaa;font-size:10px">2× clic: editar</div>
-      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.52</div>
+      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.53</div>
     </div>
 
     <div class="zbts">
@@ -562,7 +562,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
 <input type="file" id="imp-file" accept=".json" style="display:none" onchange="handleImport(event)">
 <input type="file" id="photo-file" accept="image/*" style="display:none" onchange="handlePhoto(event)">
 
-<script>/* Árbol Genealógico v1.52 - 2025 */
+<script>/* Árbol Genealógico v1.53 - 2025 */
 
 const uid=()=>'p'+(S.nextId++);
 const initials=n=>n.trim().split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
@@ -1601,7 +1601,7 @@ function copyTree(){
 
   var data=JSON.stringify({
     people:people, connections:connections, nextId:S.nextId,
-    collapsed:collapsed, _v:'arbol-genealogico-v1.52', _ts:Date.now(),
+    collapsed:collapsed, _v:'arbol-genealogico-v1.53', _ts:Date.now(),
     _partial:!copyAll, _count:ids.length
   });
 
@@ -2192,7 +2192,10 @@ function autoLayout(){
   });
 
   // loose nodes: leave untouched
-  renderAll();persist();toast(t('organized'));
+  renderAll();
+  // Run snapToGrid Y-only + recenter to fix single-parent/child chains
+  snapToGrid(null, true);
+  persist();toast(t('organized'));
 }
 
 cwEl.addEventListener('mousedown',e=>{if(e.button===1){e.preventDefault();S.panning=true;S.panStart={x:e.clientX-S.panX,y:e.clientY-S.panY};cwEl.classList.add('panning');document.body.classList.add('no-select');return;}if(e.button===0){if(e.target.closest('.card')||e.target.closest('.port'))return;if(S.wiringFrom)return;e.preventDefault();document.body.classList.add('no-select');const r=cwEl.getBoundingClientRect();const sx=e.clientX-r.left,sy=e.clientY-r.top;S.marquee={x0:sx,y0:sy,x1:sx,y1:sy};const m=document.getElementById('marquee');m.style.display='block';m.style.left=sx+'px';m.style.top=sy+'px';m.style.width='0';m.style.height='0';cwEl.classList.add('marquee-mode');}});
