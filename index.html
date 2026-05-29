@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Árbol Genealógico v1.58 - 2025 -->
+<!-- Árbol Genealógico v1.64 - 2025 -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -381,7 +381,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
       <span class="logo-top">Árbol</span>
       <span class="logo-bottom"> Genealógico</span>
     </div>
-    <span style="font-size:9px;opacity:0.4;font-family:'Lato',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--cream);margin-left:4px;align-self:flex-end;padding-bottom:2px">v1.58</span>
+    <span style="font-size:9px;opacity:0.4;font-family:'Lato',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--cream);margin-left:4px;align-self:flex-end;padding-bottom:2px">v1.64</span>
   </div>
   <div class="hbtns">
     <button class="lang-btn" id="lang-btn" onclick="toggleLang()" ontouchstart="toggleLang();event.preventDefault()" title="Idioma / Language">
@@ -422,7 +422,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--leaf);flex-shrink:0"></div><span style="font-size:10px;color:#888">↑ padre / ↓ hijo</span></div>
       <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--gold);flex-shrink:0"></div><span style="font-size:10px;color:#888">← → pareja / hermano</span></div>
       <div class="legend-row" style="color:#aaa;font-size:10px">2× clic: editar</div>
-      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.58</div>
+      <div style="color:var(--text2);font-size:9px;margin-top:6px;opacity:0.5;letter-spacing:0.5px">v1.64</div>
     </div>
 
     <div class="zbts">
@@ -562,7 +562,7 @@ body.wiring-from-side   .card.drop-target .port[data-port="r"]{background:var(--
 <input type="file" id="imp-file" accept=".json" style="display:none" onchange="handleImport(event)">
 <input type="file" id="photo-file" accept="image/*" style="display:none" onchange="handlePhoto(event)">
 
-<script>/* Árbol Genealógico v1.58 - 2025 */
+<script>/* Árbol Genealógico v1.64 - 2025 */
 
 const uid=()=>'p'+(S.nextId++);
 const initials=n=>n.trim().split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
@@ -612,8 +612,8 @@ const S = {
   _pendingImport:null,
 };
 
-function persist(){try{localStorage.setItem('gt3',JSON.stringify({people:S.people,connections:S.connections,nextId:S.nextId,collapsed:S.collapsed}));}catch(e){}}
-function loadData(){try{const d=JSON.parse(localStorage.getItem('gt3')||'null');if(d){S.people=d.people||{};S.connections=d.connections||[];S.nextId=d.nextId||1;S.collapsed=d.collapsed||{};}}catch(e){}}
+function persist(){try{localStorage.setItem('gt3',JSON.stringify({people:S.people,connections:S.connections,nextId:S.nextId,collapsed:S.collapsed,_dbgGen:S._dbgGen||{}}));}catch(e){}}
+function loadData(){try{const d=JSON.parse(localStorage.getItem('gt3')||'null');if(d){S.people=d.people||{};S.connections=d.connections||[];S.nextId=d.nextId||1;S.collapsed=d.collapsed||{};S._dbgGen=d._dbgGen||{};}}catch(e){}}
 
 function applyTransform(){document.getElementById('canvas').style.transform=`translate3d(${S.panX}px,${S.panY}px,0) scale(${S.zoom})`;}
 function doZoom(d){const nz=Math.max(.2,Math.min(2.5,S.zoom+d));const r=cwEl.getBoundingClientRect();S.panX=r.width/2-(r.width/2-S.panX)*(nz/S.zoom);S.panY=r.height/2-(r.height/2-S.panY)*(nz/S.zoom);S.zoom=nz;applyTransform();}
@@ -675,7 +675,7 @@ function buildCard(id){
       </div>
     </div>
     <div class="card-body">
-      ${!S.collapsed[id]?`<div class="card-years">${years||'&nbsp;'}</div>`:''}
+      ${!S.collapsed[id]?`<div class="card-years">${years||'&nbsp;'} <span style="color:#000;font-weight:bold;font-size:16px">${S._dbgGen&&S._dbgGen[id]!==undefined?S._dbgGen[id]:''}</span></div>`:''}
       ${!S.collapsed[id]&&p.birthplace?`<div class="card-place">📍 ${esc(p.birthplace)}</div>`:''}
     </div>
     <div class="card-btns">
@@ -698,19 +698,21 @@ function onCardMD(e){
   e.stopPropagation();
   const id=drag.dataset.drag;
   S.draggingCard=id;S.didDrag=false;
-  // Always capture ALL rigid couple offsets from current positions at drag start
+  // Rigid lateral link: follower (NO parents) follows an anchor (HAS parents).
+  // Offset re-captured only when the follower itself is dragged, so it persists.
   S.connections.forEach(function(c){
-    if(c.type!=='pareja')return;
+    if(c.type!=='pareja'&&c.type!=='hermano')return;
     var aHasPar=S.connections.some(function(x){return x.type==='padre'&&x.to===c.from;});
     var bHasPar=S.connections.some(function(x){return x.type==='padre'&&x.to===c.to;});
-    if(aHasPar===bHasPar)return;
-    var anchorId=aHasPar?c.from:c.to;
-    var floatId=aHasPar?c.to:c.from;
-    var anchorHasSib=S.connections.some(function(x){return x.type==='hermano'&&(x.from===anchorId||x.to===anchorId);});
-    if(!anchorHasSib)return;
+    if(aHasPar===bHasPar)return; // both or neither have parents — skip
+    var anchorId=aHasPar?c.from:c.to;   // the one WITH parents dominates
+    var floatId=aHasPar?c.to:c.from;    // the one WITHOUT parents follows
     var anchor=S.people[anchorId],floater=S.people[floatId];
     if(!anchor||!floater)return;
-    S['_roff_'+[anchorId,floatId].sort().join('|')]=(floater.x||0)-(anchor.x||0);
+    var key='_roff_'+[anchorId,floatId].sort().join('|');
+    if(S[key]===undefined||id===floatId){
+      S[key]=(floater.x||0)-(anchor.x||0);
+    }
   });
   const p=S.people[id];
   const wx=(e.clientX-S.panX)/S.zoom,wy=(e.clientY-S.panY)/S.zoom;
@@ -1288,10 +1290,39 @@ function confirmDel(){
   toast(t('personDeleted'));
 }
 
+function updateGenDisplay(){
+  if(!S._dbgGen)S._dbgGen={};
+  var ids=Object.keys(S.people);
+  ids.forEach(function(id){delete S._dbgGen[id];});
+  var connected=ids.filter(function(id){
+    return S.connections.some(function(c){return c.from===id||c.to===id;});
+  });
+  if(!connected.length){renderAll();return;}
+  var gen={};
+  connected.forEach(function(id){gen[id]=1000;});
+  for(var ri=0;ri<60;ri++){
+    var changed=false;
+    S.connections.forEach(function(c){
+      if(!gen.hasOwnProperty(c.from)||!gen.hasOwnProperty(c.to))return;
+      if(c.type==='padre'){
+        if(gen[c.to]<=gen[c.from]){gen[c.to]=gen[c.from]+1;changed=true;}
+      } else if(c.type==='pareja'||c.type==='hermano'){
+        var mx=Math.max(gen[c.from],gen[c.to]);
+        if(gen[c.from]<mx){gen[c.from]=mx;changed=true;}
+        if(gen[c.to]<mx){gen[c.to]=mx;changed=true;}
+      }
+    });
+    if(!changed)break;
+  }
+  connected.forEach(function(id){S._dbgGen[id]=gen[id];});
+  renderAll();
+}
+
 function removeConn(from,to,reopen){
   S.connections=S.connections.filter(function(c){
     return !((c.from===from&&c.to===to)||(c.from===to&&c.to===from));
   });
+  updateGenDisplay();
   renderConns(); persist();
   if(reopen) openDetailPanel(reopen);
   toast(t('linkDeleted'));
@@ -1344,6 +1375,7 @@ function confirmRel(){
   var type=document.getElementById('rel-type').value;
   if(type==='hijo'){ var tmp=from; from=to; to=tmp; type='padre'; }
   S.connections.push({from:from,to:to,type:type});
+  updateGenDisplay();
   renderConns(); persist();
   document.getElementById('rel-modal').classList.remove('open');
 
@@ -1460,7 +1492,7 @@ function confirmHermanoParents(){
     S._pendingCoupleMode=false;
     var pc=S._pendingCouple;S._pendingCouple=null;
     if(pc){
-      S.connections.push({from:pc.p1,to:pc.p2,type:'pareja'});
+      S.connections.push({from:pc.p1,to:pc.p2,type:'pareja'});updateGenDisplay();
       persist();renderAll();renderConns();
       toast(t('linkCreated'));
     }
@@ -1470,7 +1502,7 @@ function confirmHermanoParents(){
   if(!info) return;
   info.parents.forEach(function(pid){
     var dup=S.connections.some(function(c){return c.type==='padre'&&c.from===pid&&c.to===info.child;});
-    if(!dup) S.connections.push({from:pid,to:info.child,type:'padre'});
+    if(!dup) S.connections.push({from:pid,to:info.child,type:'padre'});updateGenDisplay();
   });
   renderConns(); persist(); toast(t('linkCreated'));
   openDetailPanel(info.relFrom||info.child);
@@ -1601,7 +1633,7 @@ function copyTree(){
 
   var data=JSON.stringify({
     people:people, connections:connections, nextId:S.nextId,
-    collapsed:collapsed, _v:'arbol-genealogico-v1.58', _ts:Date.now(),
+    collapsed:collapsed, _v:'arbol-genealogico-v1.64', _ts:Date.now(),
     _partial:!copyAll, _count:ids.length
   });
 
@@ -1837,26 +1869,57 @@ function snapToGrid(onlyIds, yOnly){
   if(!onlyIds)toast('⊹ Nodos alineados');
 }
 
-function followRigidCouple(anchorId){
+function updateFollowerOffset(dragId){
+  // If dragId is a lateral follower (NO parents) linked to an anchor that HAS parents,
+  // recompute and store its X offset so it persists for future anchor moves.
   S.connections.forEach(function(c){
-    if(c.type!=='pareja')return;
+    if(c.type!=='pareja'&&c.type!=='hermano')return;
+    if(c.from!==dragId&&c.to!==dragId)return;
+    var otherId=c.from===dragId?c.to:c.from;
+    var dragHasPar=S.connections.some(function(x){return x.type==='padre'&&x.to===dragId;});
+    var otherHasPar=S.connections.some(function(x){return x.type==='padre'&&x.to===otherId;});
+    if(dragHasPar)return;      // dragged node has ancestry — it's not a follower
+    if(!otherHasPar)return;    // anchor has no ancestry — no domination
+    var anchor=S.people[otherId],floater=S.people[dragId];
+    if(!anchor||!floater)return;
+    var key='_roff_'+[otherId,dragId].sort().join('|');
+    S[key]=(floater.x||0)-(anchor.x||0);
+  });
+}
+
+function followRigidCouple(anchorId){
+  // A node connected laterally (pareja/hermano) that has NO parents follows the
+  // anchor — BUT only if the anchor itself HAS parents (ancestry dominates).
+  // The follower may have children of its own; it still follows.
+  var anchorHasPar=S.connections.some(function(x){return x.type==='padre'&&x.to===anchorId;});
+  if(!anchorHasPar)return; // anchor has no ancestry — nothing dominates here
+  S.connections.forEach(function(c){
+    if(c.type!=='pareja'&&c.type!=='hermano')return;
     var cpId=c.from===anchorId?c.to:c.to===anchorId?c.from:null;
     if(!cpId)return;
     var cp=S.people[cpId];if(!cp)return;
-    // Only follow if: couple has NO parents AND anchor HAS hermanos
+    // The follower must have NO parents of its own
     var cpHasPar=S.connections.some(function(x){return x.type==='padre'&&x.to===cpId;});
     if(cpHasPar)return;
-    var anchorHasSib=S.connections.some(function(x){
-      return x.type==='hermano'&&(x.from===anchorId||x.to===anchorId);
-    });
-    if(!anchorHasSib)return;
     var anchor=S.people[anchorId];if(!anchor)return;
     var key='_roff_'+[anchorId,cpId].sort().join('|');
     if(S[key]===undefined)S[key]=(cp.x||0)-(anchor.x||0);
-    cp.x=(anchor.x||0)+S[key];
-    cp.y=anchor.y||0;
-    var el=document.querySelector('[data-id="'+cpId+'"]');
-    if(el){el.style.left=cp.x+'px';el.style.top=cp.y+'px';}
+    var dx=(anchor.x||0)+S[key]-(cp.x||0);
+    var dy=(anchor.y||0)-(cp.y||0);
+    // Move follower AND its descendants by the same delta
+    var sub=[cpId],seen=new Set([cpId]),q=[cpId];
+    while(q.length){
+      var cur=q.shift();
+      S.connections.forEach(function(x){
+        if(x.type==='padre'&&x.from===cur&&!seen.has(x.to)){seen.add(x.to);q.push(x.to);sub.push(x.to);}
+      });
+    }
+    sub.forEach(function(sid){
+      var sp=S.people[sid];if(!sp)return;
+      sp.x=(sp.x||0)+dx;sp.y=(sp.y||0)+dy;
+      var el=document.querySelector('[data-id="'+sid+'"]');
+      if(el){el.style.left=sp.x+'px';el.style.top=sp.y+'px';}
+    });
   });
 }
 
@@ -2003,9 +2066,11 @@ function autoLayout(){
     var a=S.people[c.from],b=S.people[c.to];
     if(!a||!b)return;
     var dist=Math.abs((a.x||0)-(b.x||0));
-    if(dist>CW){  // only store if they're actually separated (more than 1 card width)
+    // Only preserve a DELIBERATE manual gap (clearly bigger than normal spacing).
+    // Cap it so repeated organizing can't compound the distance.
+    if(dist>CW+GAP*1.5){
       var key=[c.from,c.to].sort().join('|');
-      coupleGap[key]=dist;
+      coupleGap[key]=Math.min(dist, CW*2+GAP);
     }
   });
 
@@ -2221,6 +2286,45 @@ function autoLayout(){
     recenterChildren(rootIds);
   }
 
+  // ── Snap lateral followers (NO parents) beside their anchor (HAS parents) ──
+  // The follower may have children of its own; its whole subtree moves with it.
+  S.connections.forEach(function(c){
+    if(c.type!=='pareja'&&c.type!=='hermano')return;
+    var aHasPar=Par[c.from]&&Par[c.from].length>0;
+    var bHasPar=Par[c.to]&&Par[c.to].length>0;
+    if(aHasPar===bHasPar)return; // both or neither rooted by ancestry — skip
+    var anchorId=aHasPar?c.from:c.to;
+    var floatId=aHasPar?c.to:c.from;
+    if(looseSet.has(floatId))return;
+    var anchor=S.people[anchorId],floater=S.people[floatId];
+    if(!anchor||!floater)return;
+    // Use stored offset if it exists (manual placement persists), else default right
+    var key='_roff_'+[anchorId,floatId].sort().join('|');
+    var desiredX;
+    if(S[key]!==undefined){
+      desiredX=(anchor.x||0)+S[key];
+    } else {
+      desiredX=(anchor.x||0)+CW+GAP;
+      var gg=gen[floatId];
+      var blocked=(byGen[gg]||[]).some(function(oid){
+        if(oid===floatId||oid===anchorId)return false;
+        if(looseSet.has(oid))return false;
+        return Math.abs((S.people[oid].x||0)-desiredX)<CW;
+      });
+      if(blocked) desiredX=(anchor.x||0)-CW-GAP;
+      S[key]=desiredX-(anchor.x||0);
+    }
+    var dx=desiredX-(floater.x||0);
+    var dy=(anchor.y||0)-(floater.y||0);
+    // Move follower + its descendants
+    var sub=[floatId],seen=new Set([floatId]),q=[floatId];
+    while(q.length){
+      var cur=q.shift();
+      (Ch[cur]||[]).forEach(function(ch){if(!seen.has(ch)){seen.add(ch);q.push(ch);sub.push(ch);}});
+    }
+    sub.forEach(function(sid){var sp=S.people[sid];if(!sp)return;sp.x=(sp.x||0)+dx;sp.y=(sp.y||0)+dy;});
+  });
+
   renderAll();
   // Run snapToGrid Y-only + recenter to fix single-parent/child chains
   snapToGrid(null, true);
@@ -2228,7 +2332,10 @@ function autoLayout(){
 }
 
 cwEl.addEventListener('mousedown',e=>{if(e.button===1){e.preventDefault();S.panning=true;S.panStart={x:e.clientX-S.panX,y:e.clientY-S.panY};cwEl.classList.add('panning');document.body.classList.add('no-select');return;}if(e.button===0){if(e.target.closest('.card')||e.target.closest('.port'))return;if(S.wiringFrom)return;e.preventDefault();document.body.classList.add('no-select');const r=cwEl.getBoundingClientRect();const sx=e.clientX-r.left,sy=e.clientY-r.top;S.marquee={x0:sx,y0:sy,x1:sx,y1:sy};const m=document.getElementById('marquee');m.style.display='block';m.style.left=sx+'px';m.style.top=sy+'px';m.style.width='0';m.style.height='0';cwEl.classList.add('marquee-mode');}});
-window.addEventListener('mousemove',e=>{if(S.draggingCard){const p=S.people[S.draggingCard];const nx=(e.clientX-S.panX)/S.zoom-S.dragOffset.x,ny=(e.clientY-S.panY)/S.zoom-S.dragOffset.y;const ddx=nx-(p.x||0),ddy=ny-(p.y||0);if(Math.abs(ddx)>2||Math.abs(ddy)>2)S.didDrag=true;const moveIds=(S.selectedIds.size>1&&S.selectedIds.has(S.draggingCard))?[...S.selectedIds]:[S.draggingCard];moveIds.forEach(id=>{const pp=S.people[id];if(!pp)return;if(id===S.draggingCard){pp.x=nx;pp.y=ny;}else{pp.x=(pp.x||0)+ddx;pp.y=(pp.y||0)+ddy;}const c=document.querySelector('[data-id="'+id+'"]');if(c){c.style.left=pp.x+'px';c.style.top=pp.y+'px';}});recenterChildren(moveIds);renderConns();return;}if(S.wiringFrom){const _r=cwEl.getBoundingClientRect();S.wireMouseX=e.clientX-_r.left;S.wireMouseY=e.clientY-_r.top;const target=findCardUnderMouse(S.wireMouseX,S.wireMouseY);document.querySelectorAll('.card').forEach(c=>c.classList.toggle('drop-target',c.dataset.id===target&&target!==S.wiringFrom.id));S.wiringTo=target&&target!==S.wiringFrom.id?target:null;drawWire();return;}if(S.marquee){const r=cwEl.getBoundingClientRect();S.marquee.x1=e.clientX-r.left;S.marquee.y1=e.clientY-r.top;const mx=Math.min(S.marquee.x0,S.marquee.x1),my=Math.min(S.marquee.y0,S.marquee.y1);const mw=Math.abs(S.marquee.x1-S.marquee.x0),mh=Math.abs(S.marquee.y1-S.marquee.y0);const m=document.getElementById('marquee');m.style.left=mx+'px';m.style.top=my+'px';m.style.width=mw+'px';m.style.height=mh+'px';const cx0=(mx-S.panX)/S.zoom,cy0=(my-S.panY)/S.zoom,cx1=(mx+mw-S.panX)/S.zoom,cy1=(my+mh-S.panY)/S.zoom;document.querySelectorAll('.card').forEach(c=>{const p=S.people[c.dataset.id];if(!p)return;const inside=p.x+175>cx0&&p.x<cx1&&p.y+110>cy0&&p.y<cy1;if(inside){c.classList.add('in-selection');c.classList.remove('selected');}else c.classList.remove('in-selection');});return;}if(S.panning){S.panX=e.clientX-S.panStart.x;S.panY=e.clientY-S.panStart.y;applyTransform();}});
+window.addEventListener('mousemove',e=>{if(S.draggingCard){const p=S.people[S.draggingCard];const nx=(e.clientX-S.panX)/S.zoom-S.dragOffset.x,ny=(e.clientY-S.panY)/S.zoom-S.dragOffset.y;const ddx=nx-(p.x||0),ddy=ny-(p.y||0);if(Math.abs(ddx)>2||Math.abs(ddy)>2)S.didDrag=true;const moveIds=(S.selectedIds.size>1&&S.selectedIds.has(S.draggingCard))?[...S.selectedIds]:[S.draggingCard];moveIds.forEach(id=>{const pp=S.people[id];if(!pp)return;if(id===S.draggingCard){pp.x=nx;pp.y=ny;}else{pp.x=(pp.x||0)+ddx;pp.y=(pp.y||0)+ddy;}const c=document.querySelector('[data-id="'+id+'"]');if(c){c.style.left=pp.x+'px';c.style.top=pp.y+'px';}});moveIds.forEach(id=>followRigidCouple(id));
+    // If the dragged node is a lateral follower, update its stored offset live
+    updateFollowerOffset(S.draggingCard);
+    recenterChildren(moveIds);renderConns();return;}if(S.wiringFrom){const _r=cwEl.getBoundingClientRect();S.wireMouseX=e.clientX-_r.left;S.wireMouseY=e.clientY-_r.top;const target=findCardUnderMouse(S.wireMouseX,S.wireMouseY);document.querySelectorAll('.card').forEach(c=>c.classList.toggle('drop-target',c.dataset.id===target&&target!==S.wiringFrom.id));S.wiringTo=target&&target!==S.wiringFrom.id?target:null;drawWire();return;}if(S.marquee){const r=cwEl.getBoundingClientRect();S.marquee.x1=e.clientX-r.left;S.marquee.y1=e.clientY-r.top;const mx=Math.min(S.marquee.x0,S.marquee.x1),my=Math.min(S.marquee.y0,S.marquee.y1);const mw=Math.abs(S.marquee.x1-S.marquee.x0),mh=Math.abs(S.marquee.y1-S.marquee.y0);const m=document.getElementById('marquee');m.style.left=mx+'px';m.style.top=my+'px';m.style.width=mw+'px';m.style.height=mh+'px';const cx0=(mx-S.panX)/S.zoom,cy0=(my-S.panY)/S.zoom,cx1=(mx+mw-S.panX)/S.zoom,cy1=(my+mh-S.panY)/S.zoom;document.querySelectorAll('.card').forEach(c=>{const p=S.people[c.dataset.id];if(!p)return;const inside=p.x+175>cx0&&p.x<cx1&&p.y+110>cy0&&p.y<cy1;if(inside){c.classList.add('in-selection');c.classList.remove('selected');}else c.classList.remove('in-selection');});return;}if(S.panning){S.panX=e.clientX-S.panStart.x;S.panY=e.clientY-S.panStart.y;applyTransform();}});
 window.addEventListener('mouseup',e=>{if(S.draggingCard){persist();S.draggingCard=null;S.dragOffset=null;}if(S.wiringFrom){document.body.classList.remove('wiring');document.querySelectorAll('.card').forEach(c=>c.classList.remove('drop-target','wiring-source'));document.body.classList.remove('wiring-from-top','wiring-from-bottom','wiring-from-side');document.getElementById('wire-svg').innerHTML='';var _portEl=e.target.closest?e.target.closest('.port'):null;var _cardEl=e.target.closest?e.target.closest('.card'):null;var _toIdFromEl=_portEl?_portEl.dataset.id:(_cardEl?_cardEl.dataset.id:null);const _toId=(_toIdFromEl&&_toIdFromEl!==S.wiringFrom.id)?_toIdFromEl:S.wiringTo;const _fromId=S.wiringFrom.id;S.wiringFrom=null;S.wiringTo=null;if(_toId)openRelModal(_fromId,_toId);else S.wiringFromPort=null;}if(S.marquee){const mx=Math.min(S.marquee.x0,S.marquee.x1),my=Math.min(S.marquee.y0,S.marquee.y1);const mw=Math.abs(S.marquee.x1-S.marquee.x0),mh=Math.abs(S.marquee.y1-S.marquee.y0);const cx0=(mx-S.panX)/S.zoom,cy0=(my-S.panY)/S.zoom,cx1=(mx+mw-S.panX)/S.zoom,cy1=(my+mh-S.panY)/S.zoom;S.selectedIds.clear();if(mw>4||mh>4){document.querySelectorAll('.card').forEach(c=>{const p=S.people[c.dataset.id];if(!p)return;const inside=p.x+175>cx0&&p.x<cx1&&p.y+110>cy0&&p.y<cy1;c.classList.toggle('selected',inside);c.classList.remove('in-selection');if(inside)S.selectedIds.add(c.dataset.id);});if(S.selectedIds.size>0)S.selectedId=[...S.selectedIds][0];S._justMarqueed=true;}else{document.querySelectorAll('.card').forEach(c=>c.classList.remove('selected','in-selection'));S.selectedId=null;S.selectedIds.clear();}document.getElementById('marquee').style.display='none';cwEl.classList.remove('marquee-mode');S.marquee=null;}if(S.panning){S.panning=false;cwEl.classList.remove('panning');}document.body.classList.remove('no-select');});
 cwEl.addEventListener('wheel',e=>{e.preventDefault();const d=e.deltaY>0?-.1:.1;const nz=Math.max(.2,Math.min(2.5,S.zoom+d));const r=cwEl.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;S.panX=mx-(mx-S.panX)*(nz/S.zoom);S.panY=my-(my-S.panY)*(nz/S.zoom);S.zoom=nz;applyTransform();},{passive:false});
 cwEl.addEventListener('auxclick',e=>{e.preventDefault();});
@@ -2484,7 +2591,7 @@ document.addEventListener('keydown',e=>{
    INIT
 ══════════════════════════════════════ */
 try{var _sl=localStorage.getItem('gt_lang');if(_sl)currentLang=_sl;}catch(e){}
-loadData();renderAll();applyTransform();
+loadData();updateGenDisplay();renderAll();applyTransform();
 applyLangToUI();
 setTimeout(fitScreen,50);
 
